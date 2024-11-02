@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchaudio
+torchaudio.set_audio_backend("soundfile")
 from torchaudio.transforms import MelSpectrogram
 from torch.utils.data import Dataset, DataLoader
 from transformers import BertTokenizer, BertModel
@@ -27,12 +28,12 @@ class TextxAudioDS(Dataset):
     
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         text = self.text_data[idx]
-        text_tokens = self.tokenizer(text, return_tensors = 'pt', padding = 'max_length', max_length = self.max_text_len)
+        text_tokens = self.tokenizer(text, return_tensors='pt', padding='max_length', max_length=self.max_text_len)
         text_inp_ids = text_tokens['input_ids'].squeeze()
         
         audio_path = self.audio_files[idx]
         waveform, sample_rate = torchaudio.load(audio_path)
-        waveform = torchaudio.transforms.Resample(orig_freq = sample_rate, new_freq = self.target_sr)(waveform)
+        waveform = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=self.target_sr)(waveform)
         mel_spectrogam = self.mel_trans(waveform).squeeze(0) #outputs [n_mels, time]
         return text_inp_ids, mel_spectrogam # as specified in spec, returns tuple of both tensors.
     
@@ -95,8 +96,8 @@ def train_model(
             loss = criterion(outputs, mel_spec)
             loss.backward()
             optimizer.step()
-            total_loss += loss.item()
-        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss / len(dataloader)}") 
+            cum_loss += loss.item()
+        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {cum_loss / len(dataloader)}")
         
 def infer(model: nn.Module, text: str) -> torch.Tensor:
     model.eval()
