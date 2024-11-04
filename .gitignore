@@ -162,3 +162,6 @@ cython_debug/
 #.idea/
 
 .tta/
+tta/
+kdd4/
+data/
