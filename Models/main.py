@@ -21,7 +21,7 @@ if __name__ == "__main__":
     print('Using device:', device)
 
     # load dataset
-    hf_dataset = load_dataset('keithito/lj_speech')['train']
+    hf_dataset = load_dataset('keithito/lj_speech', trust_remote_code=True)['train']
     hf_dataset.set_format(type="torch", columns=["audio"], output_all_columns=True)
 
     # split dataset into training and (validation+test) set
