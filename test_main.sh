@@ -6,10 +6,10 @@
 #SBATCH -p short
 #SBATCH -t 16:00:00
 #SBATCH --gres=gpu:1
-#SBATCH --output=/home/sppradhan/TEXT-2-AUDIO/tts_simple_%j.txt
+#SBATCH --output=/home/sppradhan/Text-2-Audio/tts_simple_%j.txt
 
 module load cuda
 module load python/3.10.13
-source ~/TEXT-2-AUDIO/kdd4/bin/activate
+source ~/Text-2-Audio/kdd4/bin/activate
 cd Models
 python main.py
