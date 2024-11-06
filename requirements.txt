@@ -13,3 +13,4 @@ datasets
 librosa
 soundfile
 scipy
+datasets[audio]
