@@ -5,6 +5,7 @@ from datasets import load_dataset
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import numpy as np
 
 if __name__ == "__main__":  
     # setup hparams for model
@@ -44,6 +45,9 @@ if __name__ == "__main__":
 
     # init model
     tts = TTS_Simple(vocab_size, embedding_dim, enc_out_size, mel_bins)
+    model_parameters = filter(lambda p: p.requires_grad, tts.parameters())
+    num_params = sum([np.prod(p.size()) for p in model_parameters])
+    print(f"Model has {num_params} trainable parameters")
     tts.to(device)
 
     # trainer hyper params
@@ -51,7 +55,8 @@ if __name__ == "__main__":
     loss_fn = nn.MSELoss()
     max_epochs = 40
     checkpoint_name = "TtsSimple.pt"
+    weight_decay=1e-4
     # setup trainer class
-    trainer = Trainer(tts, max_epochs, optim.Adam(tts.parameters(), lr=lr), loss_fn,
+    trainer = Trainer(tts, max_epochs, optim.Adam(tts.parameters(), lr=lr, weight_decay=weight_decay), loss_fn,
                       train_dl, val_dl, device, checkpoint_name)
     trainer.train()

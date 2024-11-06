@@ -10,7 +10,10 @@ class TTS_Simple(nn.Module):
         # -----Encoder-----
         self.enc_embedding = nn.Embedding(vocab_size, embedding_dim)
         self.enc_conv1 = nn.Conv1d(embedding_dim, 32, kernel_size=3, padding=1)
+        self.enc_relu1 = nn.ReLU()
         self.enc_conv2 = nn.Conv1d(32, 64, kernel_size=3, padding=1)
+        self.enc_relu2 = nn.ReLU()
+        self.enc_dropout = nn.Dropout1d(p=0.2)
         self.enc_lstm = nn.LSTM(64, enc_out_size, batch_first=True)
 
         # -----Decoder-----
@@ -27,8 +30,12 @@ class TTS_Simple(nn.Module):
         x = x.permute(0, 2, 1) # batch_size, embedding_dim, max_seq_len
         # print("Encoder Embedding Layer:", x.shape)
         x = self.enc_conv1(x) # batch_size, conv1_output_dim, max_seq_len
+        x = self.enc_relu1(x)
+        x = self.enc_dropout(x)
         # print("Encoder Conv 1 Layer:", x.shape)
         x = self.enc_conv2(x) # batch_size, conv2_output_dim, max_seq_len
+        x = self.enc_relu2(x)
+        x = self.enc_dropout(x)
         # reshape x to have shape batch_size, max_seq_len, conv2_output_dim
         x = x.permute(0, 2, 1)
         # print("Encoder Conv 2 Layer:", x.shape) # batch_size, max_seq_len, conv2_output_dim
