@@ -14,7 +14,6 @@ if __name__ == "__main__":
     embedding_dim = 64
     enc_out_size = 128
     dec_lstm_out_size = 256
-    
     batch_size = 128
     
     # setup device
@@ -51,7 +50,7 @@ if __name__ == "__main__":
     tts.to(device)
 
     # trainer hyper params
-    lr = 0.0001
+    lr = 0.001
     loss_fn = nn.MSELoss()
     max_epochs = 40
     checkpoint_name = "TtsSimple.pt"
@@ -61,3 +60,11 @@ if __name__ == "__main__":
     trainer = Trainer(tts, max_epochs, optim.Adam(tts.parameters(), lr=lr, weight_decay=weight_decay), loss_fn,
                       train_dl, val_dl, device, checkpoint_name)
     trainer.train()
+
+    # k-fold
+    # op: [3]: using pretrained embedding (phonetic)
+    #           hyperparams tuning
+    #           downsampling audio
+    #           'reduce mel_dim'
+
+    # vocoder -> waveNet, griffin_lim
