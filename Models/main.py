@@ -56,6 +56,7 @@ if __name__ == "__main__":
     max_epochs = 40
     checkpoint_name = "TtsSimple.pt"
     weight_decay=1e-4
+
     # setup trainer class
     trainer = Trainer(tts, max_epochs, optim.Adam(tts.parameters(), lr=lr, weight_decay=weight_decay), loss_fn,
                       train_dl, val_dl, device, checkpoint_name)

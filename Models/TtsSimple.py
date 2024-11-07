@@ -9,9 +9,9 @@ class TTS_Simple(nn.Module):
         super(TTS_Simple, self).__init__()
         # -----Encoder-----
         self.enc_embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.enc_conv1 = nn.Conv1d(embedding_dim, 32, kernel_size=3, padding=1)
+        self.enc_conv1 = nn.Conv1d(embedding_dim, 32, kernel_size=10, padding=1)
         self.enc_relu1 = nn.ReLU()
-        self.enc_conv2 = nn.Conv1d(32, 64, kernel_size=3, padding=1)
+        self.enc_conv2 = nn.Conv1d(32, 64, kernel_size=5, padding=1)
         self.enc_relu2 = nn.ReLU()
         self.enc_dropout = nn.Dropout1d(p=0.2)
         self.enc_lstm = nn.LSTM(64, enc_out_size, batch_first=True)
