@@ -13,7 +13,7 @@ class TTS_Simple(nn.Module):
         self.enc_relu1 = nn.ReLU()
         self.enc_conv2 = nn.Conv1d(32, 64, kernel_size=5, padding=1)
         self.enc_relu2 = nn.ReLU()
-        self.enc_dropout = nn.Dropout1d(p=0.2)
+        self.enc_dropout = nn.Dropout1d(p=0.5)
         self.enc_lstm = nn.LSTM(64, enc_out_size, batch_first=True)
 
         # -----Decoder-----

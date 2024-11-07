@@ -51,7 +51,7 @@ if __name__ == "__main__":
     tts.to(device)
 
     # trainer hyper params
-    lr = 0.001
+    lr = 0.0001
     loss_fn = nn.MSELoss()
     max_epochs = 40
     checkpoint_name = "TtsSimple.pt"
