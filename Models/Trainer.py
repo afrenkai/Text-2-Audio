@@ -12,6 +12,7 @@ class Trainer():
         self.device = device
         self.best_val_loss = float('inf')
         self.best_model_state = None
+        self.max_grad_norm = 10
 
     def train(self):
         print("Starting training")
@@ -25,6 +26,7 @@ class Trainer():
                 outputs = self.model(padded_text_seqs, padded_mel_specs, 1)
                 loss = self.criterion(outputs, padded_mel_specs)
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
                 self.optimizer.step()
                 running_loss += loss.item()
             epoch_loss = running_loss / len(self.train_dl)

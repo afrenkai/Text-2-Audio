@@ -25,11 +25,11 @@ if __name__ == "__main__":
     hf_dataset.set_format(type="torch", columns=["audio"], output_all_columns=True)
 
     # split dataset into training and (validation+test) set
-    hf_split_datadict = hf_dataset.train_test_split(test_size=0.2)
+    hf_split_datadict = hf_dataset.train_test_split(test_size=0.4)
     hf_train_dataset = hf_split_datadict['train']
     # split (validation+test) dataset into validation and test set
     hf_dataset = hf_split_datadict['test']
-    hf_split_datadict = hf_dataset.train_test_split(test_size=0.5)
+    hf_split_datadict = hf_dataset.train_test_split(test_size=0.3)
     hf_val_dataset = hf_split_datadict['train']
     hf_test_dataset = hf_split_datadict['test']
    
@@ -60,11 +60,3 @@ if __name__ == "__main__":
     trainer = Trainer(tts, max_epochs, optim.Adam(tts.parameters(), lr=lr, weight_decay=weight_decay), loss_fn,
                       train_dl, val_dl, device, checkpoint_name)
     trainer.train()
-
-    # k-fold
-    # op: [3]: using pretrained embedding (phonetic)
-    #           hyperparams tuning
-    #           downsampling audio
-    #           'reduce mel_dim'
-
-    # vocoder -> waveNet, griffin_lim
