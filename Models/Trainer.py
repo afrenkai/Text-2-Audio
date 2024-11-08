@@ -47,7 +47,7 @@ class Trainer():
             for padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, stop_token_targets in self.train_dl:
                 padded_text_seqs, padded_mel_specs = padded_text_seqs.to(self.device), padded_mel_specs.to(self.device)
                 self.optimizer.zero_grad()
-                mel_outputs, gate_outputs = self.model(padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, 0.5)
+                mel_outputs, gate_outputs = self.model(padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, 0)
                 loss = self.criterion(mel_outputs, padded_mel_specs, gate_outputs, stop_token_targets)
                 loss.backward()
                 self.optimizer.step()
