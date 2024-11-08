@@ -16,7 +16,7 @@ if __name__ == "__main__":
     enc_out_size = 128
     dec_lstm_out_size = 256
     
-    batch_size = 256
+    batch_size = 128
     
     # setup device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     # trainer hyper params
     lr = 0.001
     loss_fn = TTS_Loss()
-    max_epochs = 40
+    max_epochs = 50
     checkpoint_name = "TtsSimple.pt"
     weight_decay=1e-4
 

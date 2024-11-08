@@ -90,7 +90,8 @@ def speech_collate_fn(batch):
     text_seq_lens = torch.IntTensor(text_seq_lens)
     mel_spec_lens = torch.IntTensor(mel_spec_lens)
     stop_token_targets = torch.stack(stop_token_targets)
-    return padded_text_seqs, text_seq_lens, padded_mel_specs.permute(0, 2, 1), mel_spec_lens, stop_token_targets
+    # print("In collate", padded_mel_specs.shape, stop_token_targets.shape)
+    return padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, stop_token_targets
 
 def get_data_loader(dataset: HfDataset, batch_size, shuffle=True, num_workers=0) -> DataLoader:
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=speech_collate_fn, 

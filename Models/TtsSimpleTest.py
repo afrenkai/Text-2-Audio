@@ -38,7 +38,6 @@ class TTS_Simple(nn.Module):
         # print("Encoder LSTM Layer:", x.shape) # batch_size, max_seq_len, enc_out_size
         # DECODER
         # print('----Decoder----')
-        y = y.permute(0, 2, 1) # reshape y (batch_size, n_mels, mel_seq_len) -> (batch_size, mel_seq_len, n_mels)
         # init SOS for decoder input
         dec_input = self.get_decoder_sos(y) # batch, 1, n_mels
         mel_outputs = []
@@ -56,6 +55,7 @@ class TTS_Simple(nn.Module):
             # teacher forcing (y has shape: batch_size, mel_seq_len, n_mels)
             if torch.rand(1).item() < teacher_force_ratio:
                 dec_input = y[:, t_step:t_step+1, :] # use output from actual sequence
+                dec_input = dec_input.squeeze(1)
             else:
                 dec_input = dec_lstm_output  # use output from pred of decoder
 
@@ -72,13 +72,13 @@ class TTS_Simple(nn.Module):
     def mask_output(self, mel_outputs, gate_outputs, mel_spec_lens, max_mel_len):
         mask = self.get_mask(mel_spec_lens, max_mel_len)
         masked_mel_outputs = mel_outputs.masked_fill(~mask.unsqueeze(-1), 0)
-        masked_gate_outputs = mel_outputs.masked_fill(~mask.unsqueeze(-1), 1e3)
+        masked_gate_outputs = gate_outputs.masked_fill(~mask, 1e3)
         return masked_mel_outputs, masked_gate_outputs
 
 
     def get_mask(self, mel_spec_lens, max_mel_len):
         base_mask = torch.arange(max_mel_len).expand(mel_spec_lens.size(0), max_mel_len).T
-        return (base_mask < mel_spec_lens).to(self.device).permute(1,0)
+        return (base_mask < mel_spec_lens).to(self.device).permute(1,0).to(self.device)
 
 
 

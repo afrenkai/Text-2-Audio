@@ -1,14 +1,6 @@
 from torch import nn
 import torch
 
-
-# Use this to check output/input shapes for the model
-def print_shape_hook(module: nn.Module, input: torch.Tensor, output:torch.Tensor|tuple):
-    if isinstance(output, tuple):
-        print(module._get_name())
-    else:
-        print(f'{module._get_name()}, {output.shape}')
-
 class TTS_Loss(nn.Module):
     def __init__(self):
         super(TTS_Loss, self).__init__()
@@ -16,11 +8,8 @@ class TTS_Loss(nn.Module):
         self.stop_token_loss_bce = torch.nn.BCEWithLogitsLoss()
 
     def forward(self, mel_output, mel_target, stop_token_out, stop_token_targets):      
-            stop_token_targets = stop_token_targets.view(-1, 1)
-            stop_token_out = stop_token_out.view(-1, 1)
             mel_loss = self.mel_loss_mse(mel_output, mel_target)
             stop_token_loss = self.stop_token_loss_bce(stop_token_out, stop_token_targets)
-
             return mel_loss + stop_token_loss
 
 class Trainer():
@@ -46,8 +35,10 @@ class Trainer():
             running_loss = 0.0
             for padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, stop_token_targets in self.train_dl:
                 padded_text_seqs, padded_mel_specs = padded_text_seqs.to(self.device), padded_mel_specs.to(self.device)
+                stop_token_targets = stop_token_targets.to(self.device)
                 self.optimizer.zero_grad()
-                mel_outputs, gate_outputs = self.model(padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, 0)
+                # set t-force back to 0, 0.5
+                mel_outputs, gate_outputs = self.model(padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, 0.3)
                 loss = self.criterion(mel_outputs, padded_mel_specs, gate_outputs, stop_token_targets)
                 loss.backward()
                 self.optimizer.step()
@@ -57,8 +48,9 @@ class Trainer():
             self.model.eval()
             running_val_loss = 0.0
             with torch.no_grad():
-                for padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens in self.val_dl:
+                for padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, stop_token_targets in self.val_dl:
                     padded_text_seqs, padded_mel_specs = padded_text_seqs.to(self.device), padded_mel_specs.to(self.device)
+                    stop_token_targets = stop_token_targets.to(self.device)
                     mel_outputs, gate_outputs = self.model(padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, 0)
                     loss = self.criterion(mel_outputs, padded_mel_specs, gate_outputs, stop_token_targets)
                     running_val_loss += loss.item()
