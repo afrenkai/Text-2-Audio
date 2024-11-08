@@ -68,7 +68,10 @@ def speech_collate_fn(batch):
     mel_spec_lens = []
     for mel_spec in mel_specs:
         mel_specs_t.append(mel_spec.T)
-        mel_spec_lens.append(mel_spec.shape[-1])   
+        mel_spec_lens.append(mel_spec.shape[-1])
+    # pad sequence so pytorch can batch them together
+    # alternatives using the minimum from the batch
+    # this is using the max and padding sample that have seq_len < max_batch_seq_len   
     padded_text_seqs = pad_sequence(text_seqs, batch_first=True, padding_value=0)
     padded_mel_specs = pad_sequence(mel_specs_t, batch_first=True, padding_value=0)
     return padded_text_seqs, text_seq_lens, padded_mel_specs.permute(0, 2, 1), mel_spec_lens
