@@ -9,11 +9,12 @@ class TTS_Simple(nn.Module):
         super(TTS_Simple, self).__init__()
         # -----Encoder-----
         self.enc_embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.enc_conv1 = nn.Conv1d(embedding_dim, 32, kernel_size=10, padding=1)
-        self.enc_relu1 = nn.ReLU()
-        self.enc_conv2 = nn.Conv1d(32, 64, kernel_size=5, padding=1)
-        self.enc_relu2 = nn.ReLU()
-        self.enc_dropout = nn.Dropout1d(p=0.2)
+        # self.enc_embed_dropout = nn.Dropout1d(p=0.2) # add drop to embedding
+        # self.enc_conv1 = nn.Conv1d(embedding_dim, 32, kernel_size=10, padding=1)
+        # self.enc_relu1 = nn.ReLU()
+        # self.enc_conv2 = nn.Conv1d(32, 64, kernel_size=5, padding=1)
+        # self.enc_relu2 = nn.ReLU()
+        # self.enc_dropout = nn.Dropout1d(p=0.2)
         # want this to be bidirectional
         self.enc_lstm = nn.LSTM(64, enc_out_size, batch_first=True)
 
@@ -21,10 +22,8 @@ class TTS_Simple(nn.Module):
         self.dec_lstm = nn.LSTM(mel_bins, enc_out_size, batch_first=True)
         self.dec_fc = nn.Linear(enc_out_size, mel_bins)
 
-    def forward(self, x: torch.Tensor, y: torch.Tensor, teacher_force_ratio=0.0):
-        # print("Forward called for TTS_Simple")
-        # print("Input Layer:", x.shape) # batch_size, max_seq_len
-        # print('----Encoder----')
+    def forward(self, x: torch.Tensor, y: torch.Tensor, y_unpadded_lens, teacher_force_ratio=0.0):
+        # Input Layer: batch_size, max_seq_len
         # ENCODER
         x = self.enc_embedding(x) # batch_size, max_seq_len, embedding_dim
         # reshape x to have shape batch_size, embedding_dim, max_seq_len
@@ -43,6 +42,7 @@ class TTS_Simple(nn.Module):
         # save hidden and cell to pass to dec lstm
         x, (hidden, cell) = self.enc_lstm(x)
         # print("Encoder LSTM Layer:", x.shape) # batch_size, max_seq_len, enc_out_size
+        
         # DECODER
         # print('----Decoder----')
         y = y.permute(0, 2, 1) # reshape y (batch_size, n_mels, mel_seq_len) -> (batch_size, mel_seq_len, n_mels)

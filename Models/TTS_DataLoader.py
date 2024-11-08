@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import DataLoader, Dataset
-from datasets import Dataset as HfDataset, DatasetDict, Features, Audio
+from datasets import Dataset as HfDataset
 from torchaudio.transforms import MelSpectrogram
 from typing import Tuple
 from torch.nn.utils.rnn import pad_sequence
@@ -66,15 +66,31 @@ def speech_collate_fn(batch):
     text_seq_lens = [text_seq.shape[-1] for text_seq in text_seqs] # batch first
     mel_specs_t = []
     mel_spec_lens = []
+    max_mel_seq = -1
     for mel_spec in mel_specs:
         mel_specs_t.append(mel_spec.T)
-        mel_spec_lens.append(mel_spec.shape[-1])
+        true_mel_size = mel_spec.shape[-1]
+        mel_spec_lens.append(true_mel_size)
+        if true_mel_size > max_mel_seq:
+            max_mel_seq = true_mel_size
+
+    # need to know max size to pad to/ generate stop token input
+    stop_token_targets = []
+    for i in range(len(mel_specs)):
+        stop_token_target = torch.zeros(max_mel_seq)
+        true_mel_size = mel_spec_lens[i]
+        stop_token_target[true_mel_size:] = 1
+        stop_token_targets.append(stop_token_target)
+    
     # pad sequence so pytorch can batch them together
     # alternatives using the minimum from the batch
-    # this is using the max and padding sample that have seq_len < max_batch_seq_len   
+    # this is using the right padding for samples that have seq_len < max_batch_seq_len   
     padded_text_seqs = pad_sequence(text_seqs, batch_first=True, padding_value=0)
     padded_mel_specs = pad_sequence(mel_specs_t, batch_first=True, padding_value=0)
-    return padded_text_seqs, text_seq_lens, padded_mel_specs.permute(0, 2, 1), mel_spec_lens
+    text_seq_lens = torch.IntTensor(text_seq_lens)
+    mel_spec_lens = torch.IntTensor(mel_spec_lens)
+    stop_token_targets = torch.stack(stop_token_targets)
+    return padded_text_seqs, text_seq_lens, padded_mel_specs.permute(0, 2, 1), mel_spec_lens, stop_token_targets
 
 def get_data_loader(dataset: HfDataset, batch_size, shuffle=True, num_workers=0) -> DataLoader:
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=speech_collate_fn, 
