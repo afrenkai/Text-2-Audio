@@ -1,8 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset
-import torchaudio.transforms as T
 
 class TTS_Simple(nn.Module):
     def __init__(self, vocab_size, embedding_dim, enc_out_size, mel_bins):

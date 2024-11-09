@@ -8,6 +8,10 @@ import torch.optim as optim
 import numpy as np
 
 
+
+
+
+
 if __name__ == "__main__":  
     # setup hparams for model
     vocab_size = TTS_DataLoader.symbols_len
