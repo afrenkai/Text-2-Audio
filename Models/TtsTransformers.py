@@ -4,7 +4,7 @@ import torch.nn as nn
 
 # Apparently you need to add spaces between octothorpe and comments according to PEP STD who knew
 
-class TTSTransformers:
+class TTSTransformers(nn.Module):
     def __init__(self,
                  vocab_size,
                  embedding_dim,
