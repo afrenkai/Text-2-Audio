@@ -31,8 +31,10 @@ class TTSTransformers(nn.Module):
         self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_decoder_layers)
 
         self.decoder_fully_connected = nn.Linear(mel_bins, mel_bins)
+        self.gate_layer = nn.Linear(mel_bins, 1)
 
-    def forward(self, x: torch.Tensor, y: torch.Tensor, teacher_force_ratio: float = 0.0):
+
+    def forward(self, x: torch.Tensor, y: torch.Tensor, mel_spec_lens: torch.Tensor, teacher_force_ratio: float = 0.0):
         """
                 Forward pass for the transformer TTS model.
 
@@ -44,7 +46,7 @@ class TTSTransformers(nn.Module):
                 Returns:
                     Tensor: Predicted mel spectrogram frames (batch_size, mel_bins, mel_seq_len).
 
-        Generated with GPT.
+        Basis generated with GPT.
         Prompt: Create a well-documented docstring for the forward pass of a custom transformer model,
         referred to as the transformer TTS model.
         Assume it takes in x (a tensor representing text tokens making up <batch_size, max_sequence_length>)
@@ -67,23 +69,48 @@ class TTSTransformers(nn.Module):
         y = y.permute(1, 0, 2)  # expects (mel_seq_len, batch_size, n_mels)
         y = self.mel_positional_encoding(y)
 
-        decoder_inp = torch.zeros(1, y.size(1), y.size(2)).to(y.device)  # beginning of seq token
-        out = []  # blank list for outputs
+        decoder_inp = self.get_decoder_sos(y)  # beginning of seq token
+        mel_out = []
+        gate_out = []
 
         # time series loop
-        for t in range(y.size(0)):
-            decoder_out = self.transformer_decoder(decoder_inp, enc_out)
-            decoder_out = self.decoder_fully_connected(decoder_out[-1])  # at step t -1 for pred
-            out.append(decoder_out)
+        max_mel_len = y.size(1)
+        for t_step in range(max_mel_len):
+            dec_input = decoder_inp.unsqueeze(0)  # Prepare for transformer input <1, batch_size, mel_bins>
+            dec_input = self.mel_positional_encoding(dec_input)
+            dec_output = self.transformer_decoder(dec_input, enc_out)
+            mel_frame = self.decoder_fully_connected(dec_output[-1])
+            mel_out.append(mel_frame)
+            gate_output = torch.sigmoid(self.gate_layer(mel_frame))
+            mel_out.append(gate_output)
 
-            # teacher forcing stolen from sid
             if torch.rand(1).item() < teacher_force_ratio:
-                decoder_inp = torch.cat([decoder_inp, y[t:t + 1]], dim=0)  # Use actual next mel frame
+                dec_input = y[:, t_step, :] # use real mel frame for next inp
             else:
-                decoder_inp = torch.cat([decoder_inp, decoder_out.unsqueeze(0)], dim=0)  # Use pred mel frame
+                dec_input = mel_frame  # Use pred
 
-        out = torch.stack(out, dim=0).permute(1, 2, 0)  # <batch_size, n_mels, mel_seq_len>
-        return out
+        mel_outputs = torch.stack(mel_out).permute(1, 0, 2)  # <batch_size, mel_seq_len, mel_bins>
+        gate_outputs = torch.stack(gate_out).squeeze(2).permute(1, 0)  # <batch_size, mel_seq_len>
+
+        # Mask the outputs based on mel_spec_lens
+        masked_mel_outputs, masked_gate_outputs = self.mask_output(mel_outputs, gate_outputs, mel_spec_lens,
+                                                                   max_mel_len)
+        return masked_mel_outputs, masked_gate_outputs
+
+    def get_decoder_sos(self, y):
+        sos = torch.zeros(y.size(0), y.size(2)).to(y.device)  # <batch_size, mel_bins>
+        return sos
+
+    def mask_output(self, mel_outputs, gate_outputs, mel_spec_lens, max_mel_len):
+        mask = self.get_mask(mel_spec_lens, max_mel_len)
+        masked_mel_outputs = mel_outputs.masked_fill(~mask.unsqueeze(-1), 0)
+        masked_gate_outputs = gate_outputs.masked_fill(~mask, 1e3)
+        return masked_mel_outputs, masked_gate_outputs
+
+    def get_mask(self, mel_spec_lens, max_mel_len):
+        base_mask = torch.arange(max_mel_len).expand(len(mel_spec_lens), max_mel_len).T
+        mask = (base_mask < mel_spec_lens.unsqueeze(1)).to(self.device).permute(1, 0)
+        return mask
 
 
 class PositionalEncoding(nn.Module):
