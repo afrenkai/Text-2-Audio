@@ -33,7 +33,6 @@ class TTSTransformers(nn.Module):
         self.decoder_fully_connected = nn.Linear(mel_bins, mel_bins)
         self.gate_layer = nn.Linear(mel_bins, 1)
 
-
     def forward(self, x: torch.Tensor, y: torch.Tensor, mel_spec_lens: torch.Tensor, teacher_force_ratio: float = 0.0):
         """
                 Forward pass for the transformer TTS model.
@@ -41,7 +40,10 @@ class TTSTransformers(nn.Module):
                 Parameters:
                     x (Tensor): Input tensor representing text tokens (batch_size, max_seq_len).
                     y (Tensor): Target tensor representing mel spectrogram frames (batch_size, mel_seq_len, mel_bins).
+                    mel_spec_lens: Length tensor representing the number of spectrogram frames (i.e. [150, 200, 225] so
+                    we can pad them to be the same size (or truncate)
                     teacher_force_ratio (float): Probability of using teacher forcing during training.
+
 
                 Returns:
                     Tensor: Predicted mel spectrogram frames (batch_size, mel_bins, mel_seq_len).
@@ -76,18 +78,18 @@ class TTSTransformers(nn.Module):
         # time series loop
         max_mel_len = y.size(1)
         for t_step in range(max_mel_len):
-            dec_input = decoder_inp.unsqueeze(0)  # Prepare for transformer input <1, batch_size, mel_bins>
-            dec_input = self.mel_positional_encoding(dec_input)
-            dec_output = self.transformer_decoder(dec_input, enc_out)
+            decoder_inp = decoder_inp.unsqueeze(0)  # Prepare for transformer input <1, batch_size, mel_bins>
+            decoder_inp = self.mel_positional_encoding(decoder_inp)
+            dec_output = self.transformer_decoder(decoder_inp, enc_out)
             mel_frame = self.decoder_fully_connected(dec_output[-1])
             mel_out.append(mel_frame)
             gate_output = torch.sigmoid(self.gate_layer(mel_frame))
             mel_out.append(gate_output)
 
             if torch.rand(1).item() < teacher_force_ratio:
-                dec_input = y[:, t_step, :] # use real mel frame for next inp
+                decoder_inp = y[:, t_step, :]  # use real mel frame for next inp
             else:
-                dec_input = mel_frame  # Use pred
+                decoder_inp = mel_frame  # Use pred
 
         mel_outputs = torch.stack(mel_out).permute(1, 0, 2)  # <batch_size, mel_seq_len, mel_bins>
         gate_outputs = torch.stack(gate_out).squeeze(2).permute(1, 0)  # <batch_size, mel_seq_len>
@@ -97,7 +99,8 @@ class TTSTransformers(nn.Module):
                                                                    max_mel_len)
         return masked_mel_outputs, masked_gate_outputs
 
-    def get_decoder_sos(self, y):
+    @staticmethod
+    def get_decoder_sos(y):
         sos = torch.zeros(y.size(0), y.size(2)).to(y.device)  # <batch_size, mel_bins>
         return sos
 
@@ -108,7 +111,7 @@ class TTSTransformers(nn.Module):
         return masked_mel_outputs, masked_gate_outputs
 
     def get_mask(self, mel_spec_lens, max_mel_len):
-        base_mask = torch.arange(max_mel_len).expand(len(mel_spec_lens), max_mel_len).T
+        base_mask = torch.arange(max_mel_len, device=self.device).expand(len(mel_spec_lens), max_mel_len).T
         mask = (base_mask < mel_spec_lens.unsqueeze(1)).to(self.device).permute(1, 0)
         return mask
 
