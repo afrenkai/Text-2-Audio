@@ -84,6 +84,7 @@ class Pipeline:
 
 if __name__ == "__main__":
     common_config = {
+        'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         'vocab_size': TTS_DataLoader.symbols_len,
         'mel_bins': 128,
         'embedding_dim': 64,
@@ -101,7 +102,6 @@ if __name__ == "__main__":
     simple_config = {
         **common_config,
         'enc_out_size': 128,
-        'dec_lstm_out_size': 256
     }
 
     model_classes = {
@@ -111,7 +111,7 @@ if __name__ == "__main__":
 
     selected_model = 'transformer'
     model_class = model_classes[selected_model]
-    model_config = transformer_config if selected_model == 'transformer' else common_config
+    model_config = transformer_config if selected_model == 'transformer' else simple_config
     batch_size = 128
     lr = 0.001
     max_epochs = 50

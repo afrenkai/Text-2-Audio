@@ -6,6 +6,7 @@ import torch.nn as nn
 
 class TTSTransformers(nn.Module):
     def __init__(self,
+                 device,
                  vocab_size,
                  embedding_dim,
                  mel_bins,
@@ -15,7 +16,7 @@ class TTSTransformers(nn.Module):
                  num_decoder_layers,
                  dim_ffn):
         super(TTSTransformers, self).__init__()
-
+        self.device = device
         # ENCODER
         self.enc_embedding = nn.Embedding(vocab_size, embedding_dim)
         # positional encoding here
@@ -148,5 +149,5 @@ class PositionalEncoding(nn.Module):
         Prompt: Create a well-documented docstring for the forward pass of a positional encoding method.
         Assume that X is made up of <sequence_length, batch_size, embedding_dimension>
                """
-        x = x + self.pos_enc[:x.size(0), :]
+        x = x + self.positional_encoding[:x.size(0), :]
         return x

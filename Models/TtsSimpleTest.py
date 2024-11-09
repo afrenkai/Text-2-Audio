@@ -50,7 +50,7 @@ class TTS_Simple(nn.Module):
             dec_lstm_output = self.dec_lin_proj(hidden)
             mel_outputs.append(dec_lstm_output)
             # linear projection of lstm out to mel_dims
-            dec_cell_output = nn.functional.sigmoid(self.dec_eos_gate(hidden))
+            dec_cell_output = torch.sigmoid(self.dec_eos_gate(hidden))
             gate_outputs.append(dec_cell_output)            
             # teacher forcing (y has shape: batch_size, mel_seq_len, n_mels)
             if torch.rand(1).item() < teacher_force_ratio:
