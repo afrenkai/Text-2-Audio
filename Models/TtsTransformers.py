@@ -103,6 +103,7 @@ class TTSTransformers(nn.Module):
     def get_decoder_sos(y):
         sos = torch.zeros(y.size(0), y.size(2)).to(y.device)  # <batch_size, mel_bins>
         return sos
+    # non-zero chance I forgot something here
 
     def mask_output(self, mel_outputs, gate_outputs, mel_spec_lens, max_mel_len):
         mask = self.get_mask(mel_spec_lens, max_mel_len)
@@ -113,6 +114,9 @@ class TTSTransformers(nn.Module):
     def get_mask(self, mel_spec_lens, max_mel_len):
         base_mask = torch.arange(max_mel_len, device=self.device).expand(len(mel_spec_lens), max_mel_len).T
         mask = (base_mask < mel_spec_lens.unsqueeze(1)).to(self.device).permute(1, 0)
+        # not sure if this is a false positive or not. the mask we create is technically a boolean tensor, but is
+        # treated as type bool by the interpreter, leading to the false flag on .to not being a valid op for a bool.
+
         return mask
 
 
@@ -125,7 +129,10 @@ class PositionalEncoding(nn.Module):
         pos_enc[:, 0::2] = torch.sin(position * division_term)
         pos_enc[:, 1::2] = torch.cos(position * division_term)
         pos_enc = pos_enc.unsqueeze(0).transpose(0, 1)
-        self.register_buffer('positional_encoding', pos_enc)
+        self.register_buffer('positional_encoding', pos_enc)  # basically allows us to pass in a non-traditionally
+        # updating tensor. Here, we positionally encode more than once every epoch, which means that we need custom
+        # logic (see below) to handle the forward pass
+        # https://stackoverflow.com/questions/57540745/what-is-the-difference-between-register-parameter-and-register-buffer-in-pytorch
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
