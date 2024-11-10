@@ -29,7 +29,7 @@ class Trainer():
         self.best_model_state = None
 
     def train(self):
-        print("Starting training")
+        print("\nStarting training")
         # trains self.model with certain params
         for epoch in range(self.max_epochs):
             self.model.train()
