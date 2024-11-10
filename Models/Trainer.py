@@ -73,7 +73,24 @@ class Trainer():
                 for padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, stop_token_targets in self.val_dl:
                     padded_text_seqs, padded_mel_specs = padded_text_seqs.to(self.device), padded_mel_specs.to(self.device)
                     stop_token_targets = stop_token_targets.to(self.device)
-                    mel_outputs, gate_outputs = self.model(padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, 0)
+                    if isinstance(self.model, TTSTransformers):
+                        # TTSTransformers expects 4 arguments
+                        mel_outputs, gate_outputs = self.model(
+                            padded_text_seqs,
+                            padded_mel_specs,
+                            mel_spec_lens,
+                            teacher_force_ratio=0.0
+                        )
+                    else:
+
+                        mel_outputs, gate_outputs = self.model(
+                            padded_text_seqs,
+                            text_seq_lens,
+                            padded_mel_specs,
+                            mel_spec_lens,
+                            teacher_force_ratio=0.3
+                        )
+
                     loss = self.criterion(mel_outputs, padded_mel_specs, gate_outputs, stop_token_targets)
                     running_val_loss += loss.item()
                     val_loader.set_postfix({"Val Loss": loss.item()})
