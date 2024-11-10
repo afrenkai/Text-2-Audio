@@ -133,6 +133,7 @@ class TTSTransformers(nn.Module):
         return masked_mel_outputs, masked_gate_outputs
 
     def get_mask(self, mel_spec_lens, max_mel_len):
+        mel_spec_lens = mel_spec_lens.to(self.device)
         # Create a mask of shape <batch_size, max_mel_len> with boolean values indicating valid positions
         base_mask = torch.arange(max_mel_len, device=self.device).expand(len(mel_spec_lens), max_mel_len)
         mask = (base_mask < mel_spec_lens.unsqueeze(1)).to(self.device)  # Remove permute if not required
