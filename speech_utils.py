@@ -52,7 +52,8 @@ class SpeechConverter():
             win_length=win_length,
             hop_length=hop_length
         )
-    def pow_to_db_mel_spec(self, mel_spec):
+        
+    def pow_to_db_mel_spec(self,mel_spec):
         mel_spec = torchaudio.functional.amplitude_to_DB(
             mel_spec,
             multiplier = ampl_multiplier, 

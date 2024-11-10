@@ -1,4 +1,4 @@
-from TtsSimple import TTS_Simple
+from Models.TtsSimple import TTS_Simple
 from Trainer import Trainer, TTS_Loss
 import TTS_DataLoader
 from datasets import load_dataset
@@ -75,7 +75,6 @@ if __name__ == "__main__":
     # trainer hyper params
     
     loss_fn = TTS_Loss()
-    # loss = loss_fn(mel_out, padded_mel_specs, stop_out, stop_token_targets, mask)
     max_epochs = 100
     checkpoint_name = "TtsSimple.pt"
     lr = 0.001
@@ -83,5 +82,5 @@ if __name__ == "__main__":
 
     # setup trainer class
     trainer = Trainer(tts, max_epochs, optim.Adam(tts.parameters(), lr=lr, weight_decay=weight_decay), loss_fn,
-                      train_dl, val_dl, device, checkpoint_name, teacher_f_ratio=0.5)
+                      train_dl, val_dl, device, checkpoint_name, teacher_f_ratio=0.3)
     trainer.train()

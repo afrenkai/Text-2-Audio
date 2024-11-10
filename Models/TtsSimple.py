@@ -9,6 +9,7 @@ class TTS_Simple(nn.Module):
     def __init__(self, device, vocab_size, embedding_dim, enc_out_size, mel_bins=128):
         super(TTS_Simple, self).__init__()
         self.device = device
+        self.mel_bins = mel_bins
         # -----Encoder-----
         self.enc_embedding = nn.Embedding(vocab_size, embedding_dim)
         self.enc_linear = nn.Linear(embedding_dim, embedding_dim)
@@ -25,8 +26,8 @@ class TTS_Simple(nn.Module):
         self.enc_lstm = nn.LSTM(embedding_dim, enc_out_size, batch_first=True)
         
         # -----Decoder-----
-        self.dec_lstm = nn.LSTM(mel_bins, enc_out_size, batch_first=True)
-        self.dec_lin_proj = nn.Linear(enc_out_size, mel_bins)
+        self.dec_lstm = nn.LSTM(self.mel_bins, enc_out_size, batch_first=True)
+        self.dec_lin_proj = nn.Linear(enc_out_size, self.mel_bins)
         self.dec_eos_gate = nn.Linear(enc_out_size, 1)
 
 
@@ -34,7 +35,6 @@ class TTS_Simple(nn.Module):
         # ENCODER
         x = self.enc_embedding(x) # batch_size, max_seq_len, embedding_dim
         # TODO check enforce_sorted logic
-        # TODO maybe keep text_seq_lens as python list
         x = self.enc_linear(x)
         x = x.permute(0, 2, 1)
         # First Conv Layer
@@ -53,7 +53,7 @@ class TTS_Simple(nn.Module):
 
         # DECODER
         # init SOS for decoder input
-        dec_input = self.get_decoder_sos(y) # batch, 1, n_mels
+        dec_input = self.get_decoder_sos(y.size(0), y.size(2)) # batch, 1, n_mels
         mel_outputs = []
         gate_outputs = []
         # iterate time_dim (i.e. max_mel_length of batch)
@@ -75,10 +75,10 @@ class TTS_Simple(nn.Module):
         gate_outputs =  torch.stack(gate_outputs, dim=1).squeeze(-1)
         masked_mel_outputs, masked_gate_outputs, mask = self.mask_output(mel_outputs, gate_outputs, mel_spec_lens, max_mel_len)
         return masked_mel_outputs, masked_gate_outputs, mask
+   
+    def get_decoder_sos(self, batch_size, n_mels):
+        return torch.zeros(batch_size, 1, n_mels).to(self.device) # batch, 1, n_mels
 
-    def get_decoder_sos(self, y):
-        sos =  torch.zeros(y.size(0), 1, y.size(2)).to(y.device) # batch, 1, n_mels
-        return sos
     
     def mask_output(self, mel_outputs: torch.Tensor, gate_outputs: torch.Tensor, mel_spec_lens: torch.Tensor, max_mel_len):
         mask = self.get_mask(mel_spec_lens, max_mel_len)
@@ -90,6 +90,52 @@ class TTS_Simple(nn.Module):
         base_mask = torch.arange(max_mel_len).expand(mel_spec_lens.size(0), max_mel_len).T
         mask = (base_mask > mel_spec_lens).to(self.device).permute(1,0).to(self.device)
         return mask
+
+    @torch.no_grad()
+    def inference(self, text_seq, max_mel_length=800, stop_token_thresh=0.5):
+        self.eval()    
+        self.train(False)
+        # assume text_seq has shape (1, input_seq_len)
+        text_lengths = torch.IntTensor([text_seq.shape[-1]])
+        # TODO: separate encoder and decoder logic into different classes
+        #       to reduce repetition like below.
+        x = self.enc_embedding(text_seq) # 1, max_seq_len, embedding_dim
+        x = self.enc_linear(x)
+        x = x.permute(0, 2, 1)
+        # First Conv Layer
+        x = self.enc_conv1(x)
+        x = self.enc_batch_norm_1(x)
+        x = nn.functional.relu(x)
+        x = self.enc_dropout_1(x)
+        # Second Conv Layer
+        x = self.enc_conv2(x)
+        x = self.enc_batch_norm_2(x)
+        x = nn.functional.relu(x)
+        x = self.enc_dropout_2(x)
+        x = x.permute(0, 2, 1)
+        packed_x = pack_padded_sequence(x , text_lengths.cpu().numpy(), batch_first=True, enforce_sorted=False) 
+        _, (hidden, cell) = self.enc_lstm(packed_x)
+        inference_batch_size = 1
+        dec_input = self.get_decoder_sos(inference_batch_size, self.mel_bins) # (1, mel_bins)
+        mel_lengths = torch.tensor(1).unsqueeze(0).cuda()
+        stop_token_outputs = torch.FloatTensor([]).to(text.device)
+        mel_outputs = []
+        for t_step in range(max_mel_length):
+            dec_lstm_output, (hidden, cell) = self.dec_lstm(dec_input, (hidden, cell))
+            # pass output of decoder lstm to fc layer to map from dec_lstm_hidden to n_mels
+            dec_mel_output = self.dec_lin_proj(dec_lstm_output)
+            mel_outputs.append(dec_mel_output.squeeze(1))
+            # linear projection of lstm out to mel_dims
+            dec_gate_output = self.dec_eos_gate(dec_lstm_output)
+            # teacher forcing (y has shape: batch_size, mel_seq_len, n_mels)
+            # if network predicted stop token
+            if torch.nn.functional.sigmoid(dec_gate_output) > stop_token_thresh:
+                break
+            if t_step == max_mel_length-1:
+                print('WARNING: max_mel_length reached, model wanted to generate speech for longer')
+
+        mel_outputs = torch.stack(mel_outputs, dim=1)
+        return mel_outputs
 
 
 

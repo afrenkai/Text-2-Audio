@@ -49,7 +49,8 @@ class LjSpeechDataset(Dataset):
     def __getitem__(self, idx) -> Tuple[torch.IntTensor, torch.Tensor]:
         text = self.hf_dataset[idx][self.text_col]
         audio_waveform = self.hf_dataset[idx]['audio']['array']
-        sampling_rate = self.hf_dataset[idx]['audio']['sampling_rate']
+        # sr is constant for the dataset, use speech_utils.sr
+        # sampling_rate = self.hf_dataset[idx]['audio']['sampling_rate']
         
         # Apply text_to_seq_fn to the text
         text_seq = self.text_to_seq_fn(text)
