@@ -93,8 +93,8 @@ class TTS_Simple(nn.Module):
 
     @torch.no_grad()
     def inference(self, text_seq, max_mel_length=800, stop_token_thresh=0.5):
-        self.eval()    
         self.train(False)
+        self.eval()
         # assume text_seq has shape (1, input_seq_len)
         text_lengths = torch.IntTensor([text_seq.shape[-1]])
         # TODO: separate encoder and decoder logic into different classes
@@ -117,8 +117,6 @@ class TTS_Simple(nn.Module):
         _, (hidden, cell) = self.enc_lstm(packed_x)
         inference_batch_size = 1
         dec_input = self.get_decoder_sos(inference_batch_size, self.mel_bins) # (1, mel_bins)
-        mel_lengths = torch.tensor(1).unsqueeze(0).cuda()
-        stop_token_outputs = torch.FloatTensor([]).to(text.device)
         mel_outputs = []
         for t_step in range(max_mel_length):
             dec_lstm_output, (hidden, cell) = self.dec_lstm(dec_input, (hidden, cell))
@@ -134,7 +132,7 @@ class TTS_Simple(nn.Module):
             if t_step == max_mel_length-1:
                 print('WARNING: max_mel_length reached, model wanted to generate speech for longer')
 
-        mel_outputs = torch.stack(mel_outputs, dim=1)
+        mel_outputs = torch.stack(mel_outputs, dim=1).to(self.device)
         return mel_outputs
 
 

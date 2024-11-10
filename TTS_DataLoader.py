@@ -16,7 +16,7 @@ symbols = [
     'â', 'è', 'é', 'ê', 'ü', '’', '“', '”' \
 ]
 
-symbols_len= len(symbols)
+symbols_len = len(symbols)
 
 symbol_to_idx = {
   s: i for i, s in enumerate(symbols)

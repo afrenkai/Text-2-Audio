@@ -70,3 +70,18 @@ class SpeechConverter():
         db_mel_spec = self.pow_to_db_mel_spec(mel_spec)
         db_mel_spec = db_mel_spec.squeeze(0)
         return db_mel_spec
+    
+    def inverse_mel_spec_to_wav(self, mel_spec):
+        power_mel_spec = self.db_to_power_mel_spec(mel_spec)
+        spectrogram = self.mel_inverse_transform(power_mel_spec)
+        pseudo_wav = self.griffnlim_transform(spectrogram)
+        return pseudo_wav
+
+    def db_to_power_mel_spec(self, mel_spec):
+        mel_spec = mel_spec*scale_db
+        mel_spec = torchaudio.functional.DB_to_amplitude(
+            mel_spec,
+            ref=ampl_ref,
+            power=ampl_power
+            )  
+        return mel_spec
