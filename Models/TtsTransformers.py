@@ -102,7 +102,7 @@ class TTSTransformers(nn.Module):
             mel_out.append(mel_frame)
             gate_output = torch.sigmoid(self.gate_layer(mel_frame))
             # print(f"Time step {t_step}, gate_output shape:", gate_output.shape)
-            mel_out.append(gate_output)
+            gate_out.append(gate_output)
 
             if torch.rand(1).item() < teacher_force_ratio:
                 decoder_inp = y[t_step]  # use real mel frame for next inp
@@ -133,12 +133,13 @@ class TTSTransformers(nn.Module):
         return masked_mel_outputs, masked_gate_outputs
 
     def get_mask(self, mel_spec_lens, max_mel_len):
-        base_mask = torch.arange(max_mel_len, device=self.device).expand(len(mel_spec_lens), max_mel_len).T
-        mask = (base_mask < mel_spec_lens.unsqueeze(1)).to(self.device).permute(1, 0)
+        # Create a mask of shape <batch_size, max_mel_len> with boolean values indicating valid positions
+        base_mask = torch.arange(max_mel_len, device=self.device).expand(len(mel_spec_lens), max_mel_len)
+        mask = (base_mask < mel_spec_lens.unsqueeze(1)).to(self.device)  # Remove permute if not required
+        return mask
+
         # not sure if this is a false positive or not. the mask we create is technically a boolean tensor, but is
         # treated as type bool by the interpreter, leading to the false flag on .to not being a valid op for a bool.
-
-        return mask
 
 
 class PositionalEncoding(nn.Module):
