@@ -86,17 +86,20 @@ if __name__ == "__main__":
     common_config = {
         'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         'vocab_size': TTS_DataLoader.symbols_len,
-        'mel_bins': 128,
+        'mel_bins': 64,
         'embedding_dim': 64,
     }
 
     transformer_config = {
-        **common_config,
+        'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
+        'vocab_size': TTS_DataLoader.symbols_len,
+        'mel_bins': 64,  # Set mel_bins to match d_model for decoder
+        'embedding_dim': 64,
         'n_heads_enc': 8,
         'n_heads_dec': 8,
         'num_encoder_layers': 6,
         'num_decoder_layers': 6,
-        'dim_ffn': 512
+        'dim_ffn': 256
     }
 
     simple_config = {

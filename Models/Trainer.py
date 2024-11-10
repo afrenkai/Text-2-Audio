@@ -1,6 +1,6 @@
 from torch import nn
 import torch
-
+from TtsTransformers import TTSTransformers
 class TTS_Loss(nn.Module):
     def __init__(self):
         super(TTS_Loss, self).__init__()
@@ -38,14 +38,23 @@ class Trainer():
                 stop_token_targets = stop_token_targets.to(self.device)
                 self.optimizer.zero_grad()
                 # set t-force back to 0, 0.5
-                if self.model == 'TTSTransformers':
-                    mel_outputs, gate_outputs = self.model(padded_text_seqs,
+                if isinstance(self.model, TTSTransformers):
+                    # TTSTransformers expects 4 arguments
+                    mel_outputs, gate_outputs = self.model(
+                        padded_text_seqs,
                         padded_mel_specs,
                         mel_spec_lens,
-                        teacher_force_ratio=0.0)
+                        teacher_force_ratio=0.0
+                    )
                 else:
-                    mel_outputs, gate_outputs = self.model(padded_text_seqs, text_seq_lens, padded_mel_specs,
-                                                           mel_spec_lens, 0.3)
+
+                    mel_outputs, gate_outputs = self.model(
+                        padded_text_seqs,
+                        text_seq_lens,
+                        padded_mel_specs,
+                        mel_spec_lens,
+                        teacher_force_ratio=0.3
+                    )
 
                 loss = self.criterion(mel_outputs, padded_mel_specs, gate_outputs, stop_token_targets)
                 loss.backward()

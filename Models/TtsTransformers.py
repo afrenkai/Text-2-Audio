@@ -26,15 +26,16 @@ class TTSTransformers(nn.Module):
 
         # DECODER
         # positional encoding for decoder too
-        self.mel_positional_encoding = PositionalEncoding(mel_bins)
+        self.mel_positional_encoding = PositionalEncoding(embedding_dim)
 
-        decoder_layer = nn.TransformerDecoderLayer(d_model=mel_bins, nhead=n_heads_dec, dim_feedforward=dim_ffn)
+        decoder_layer = nn.TransformerDecoderLayer(d_model=embedding_dim, nhead=n_heads_dec, dim_feedforward=dim_ffn)
         self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_decoder_layers)
 
-        self.decoder_fully_connected = nn.Linear(mel_bins, mel_bins)
-        self.gate_layer = nn.Linear(mel_bins, 1)
+        self.decoder_fully_connected = nn.Linear(embedding_dim, mel_bins)
+        self.gate_layer = nn.Linear(embedding_dim, 1)
 
     def forward(self, x: torch.Tensor, y: torch.Tensor, mel_spec_lens: torch.Tensor, teacher_force_ratio: float = 0.0):
+        # print("Input shapes - x:", x.shape, "y:", y.shape, "mel_spec_lens:", mel_spec_lens.shape)
         """
                 Forward pass for the transformer TTS model.
 
@@ -63,46 +64,65 @@ class TTSTransformers(nn.Module):
         # ENCODER
 
         x = self.enc_embedding(x)  # expected to be <batch_size, max_seq_len, embedding_dim>
+        # print("Encoder embedding shape:", x.shape)
         x = self.positional_encoding(x)  # time-ordering
+        # print("After positional encoding (encoder):", x.shape)
         x = x.permute(1, 0, 2)  # tf needs <seq_len, batch_size, embedding_dim>
+        # print("After permutation:", x.shape)
         enc_out = self.transformer_encoder(x)  # expected to be <max_seq_len, batch_size, enc_out_size>
 
         # DECODER
         # output: <batch_size, mel_seq_len, mel_bins>
         y = y.permute(1, 0, 2)  # expects (mel_seq_len, batch_size, n_mels)
+        # print('y after permute', y.shape())
         y = self.mel_positional_encoding(y)
+        # print('y after pos enc', y.shape())
+
 
         decoder_inp = self.get_decoder_sos(y)  # beginning of seq token
+        # print('decoder_inp', decoder_inp.shape)
+
+
         mel_out = []
         gate_out = []
 
         # time series loop
-        max_mel_len = y.size(1)
+        max_mel_len = y.size(0)
         for t_step in range(max_mel_len):
             decoder_inp = decoder_inp.unsqueeze(0)  # Prepare for transformer input <1, batch_size, mel_bins>
+
+            # print(f"Time step {t_step}, decoder input shape:", decoder_inp.shape)
             decoder_inp = self.mel_positional_encoding(decoder_inp)
+            # print(f"Time step {t_step}, decoder_inp shape before transformer_decoder:", decoder_inp.shape)
+            # print(f"Encoder output shape before transformer_decoder: {enc_out.shape}")
             dec_output = self.transformer_decoder(decoder_inp, enc_out)
+            # print(f"Time step {t_step}, decoder output shape:", dec_output.shape)
             mel_frame = self.decoder_fully_connected(dec_output[-1])
+            # print(f"Time step {t_step}, mel_frame shape:", mel_frame.shape)
             mel_out.append(mel_frame)
             gate_output = torch.sigmoid(self.gate_layer(mel_frame))
+            # print(f"Time step {t_step}, gate_output shape:", gate_output.shape)
             mel_out.append(gate_output)
 
             if torch.rand(1).item() < teacher_force_ratio:
-                decoder_inp = y[:, t_step, :]  # use real mel frame for next inp
+                decoder_inp = y[t_step]  # use real mel frame for next inp
             else:
                 decoder_inp = mel_frame  # Use pred
 
         mel_outputs = torch.stack(mel_out).permute(1, 0, 2)  # <batch_size, mel_seq_len, mel_bins>
         gate_outputs = torch.stack(gate_out).squeeze(2).permute(1, 0)  # <batch_size, mel_seq_len>
-
+        # print("Final mel_outputs shape:", mel_outputs.shape)
+        # print("Final gate_outputs shape:", gate_outputs.shape)
         # Mask the outputs based on mel_spec_lens
         masked_mel_outputs, masked_gate_outputs = self.mask_output(mel_outputs, gate_outputs, mel_spec_lens,
                                                                    max_mel_len)
+        # print("Masked mel_outputs shape:", masked_mel_outputs.shape)
+        # print("Masked gate_outputs shape:", masked_gate_outputs.shape)
         return masked_mel_outputs, masked_gate_outputs
 
     @staticmethod
     def get_decoder_sos(y):
-        sos = torch.zeros(y.size(0), y.size(2)).to(y.device)  # <batch_size, mel_bins>
+        sos = torch.zeros(y.size(1), y.size(2)).to(y.device)  # <batch_size, mel_bins>
         return sos
     # non-zero chance I forgot something here
 
@@ -149,5 +169,7 @@ class PositionalEncoding(nn.Module):
         Prompt: Create a well-documented docstring for the forward pass of a positional encoding method.
         Assume that X is made up of <sequence_length, batch_size, embedding_dimension>
                """
+        # print("Positional encoding input shape:", x.shape)
         x = x + self.positional_encoding[:x.size(0), :]
+        # print("Positional encoding output shape:", x.shape)
         return x
