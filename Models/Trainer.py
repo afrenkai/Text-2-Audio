@@ -63,6 +63,7 @@ class Trainer():
                 self.optimizer.step()
                 running_loss += loss.item()
                 train_loader.set_postfix({"Loss": loss.item()})
+                train_loader.update(1)
             epoch_loss = running_loss / len(self.train_dl)
             # Validation
             self.model.eval()
@@ -76,6 +77,7 @@ class Trainer():
                     loss = self.criterion(mel_outputs, padded_mel_specs, gate_outputs, stop_token_targets)
                     running_val_loss += loss.item()
                     val_loader.set_postfix({"Val Loss": loss.item()})
+                    val_loader.update(1)
             epoch_val_loss = running_val_loss / len(self.val_dl)
 
             if epoch_val_loss < self.best_val_loss:

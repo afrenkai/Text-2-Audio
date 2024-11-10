@@ -97,8 +97,8 @@ if __name__ == "__main__":
         'embedding_dim': 64,
         'n_heads_enc': 8,
         'n_heads_dec': 8,
-        'num_encoder_layers': 6,
-        'num_decoder_layers': 6,
+        'num_encoder_layers': 2,
+        'num_decoder_layers': 2,
         'dim_ffn': 256
     }
 
@@ -117,7 +117,7 @@ if __name__ == "__main__":
     model_config = transformer_config if selected_model == 'transformer' else simple_config
     batch_size = 32
     lr = 0.001
-    max_epochs = 50
+    max_epochs = 10
     checkpoint_name = f"{selected_model}_TtsModel.pt"
     weight_decay = 1e-4
 
