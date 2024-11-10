@@ -5,6 +5,7 @@ from torchaudio.transforms import MelSpectrogram
 from typing import Tuple
 from torch.nn.utils.rnn import pad_sequence
 import warnings
+from speech_utils import SpeechConverter
 
 EOS = 'EOS'
 symbols = [
@@ -34,13 +35,13 @@ def text_to_seq_char_level(text):
 
 
 class LjSpeechDataset(Dataset):
-    def __init__(self, hf_dataset: HfDataset, convert_to_mel=True, num_mels=128,
+    def __init__(self, hf_dataset: HfDataset, num_mels=128,
                  text_col='normalized_text', text_to_seq_fn=text_to_seq_char_level):
         self.hf_dataset = hf_dataset
-        self.convert_to_mel = convert_to_mel
         self.num_mels = num_mels
         self.text_col = text_col
         self.text_to_seq_fn = text_to_seq_fn
+        self.speech_converter = SpeechConverter(self.num_mels)
 
     def __len__(self) -> int:
         return len(self.hf_dataset)
@@ -54,11 +55,15 @@ class LjSpeechDataset(Dataset):
         text_seq = self.text_to_seq_fn(text)
 
         # Processing the wave-form
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=UserWarning)
-            mel_transform = MelSpectrogram(sampling_rate, n_mels=self.num_mels)
-        mel_spec = mel_transform(audio_waveform)
+        # with warnings.catch_warnings():
+        #     warnings.filterwarnings("ignore", category=UserWarning)
+        #     mel_transform = MelSpectrogram(sampling_rate, n_mels=self.num_mels)
+        # mel_spec = mel_transform(audio_waveform)
+        mel_spec = self.speech_converter.convert_to_mel_spec(audio_waveform)
+        
         return text_seq, mel_spec
+    
+
 
 
 def speech_collate_fn(batch):
@@ -80,6 +85,7 @@ def speech_collate_fn(batch):
         stop_token_target = torch.zeros(max_mel_seq)
         true_mel_size = mel_spec_lens[i]
         stop_token_target[true_mel_size:] = 1
+        # stop_token_target[-1] = 1 # TODO: case when true = max; should last value always be eos?
         stop_token_targets.append(stop_token_target)
     
     # pad sequence so pytorch can batch them together
