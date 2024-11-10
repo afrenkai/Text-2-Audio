@@ -1,6 +1,7 @@
 from torch import nn
 import torch
 from TtsTransformers import TTSTransformers
+from tqdm import tqdm
 class TTS_Loss(nn.Module):
     def __init__(self):
         super(TTS_Loss, self).__init__()
@@ -33,6 +34,7 @@ class Trainer():
         for epoch in range(self.max_epochs):
             self.model.train()
             running_loss = 0.0
+            train_loader = tqdm(self.train_dl, desc=f"Epoch {epoch + 1}/{self.max_epochs} - Training", leave=False)
             for padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, stop_token_targets in self.train_dl:
                 padded_text_seqs, padded_mel_specs = padded_text_seqs.to(self.device), padded_mel_specs.to(self.device)
                 stop_token_targets = stop_token_targets.to(self.device)
@@ -60,10 +62,12 @@ class Trainer():
                 loss.backward()
                 self.optimizer.step()
                 running_loss += loss.item()
+                train_loader.set_postfix({"Loss": loss.item()})
             epoch_loss = running_loss / len(self.train_dl)
             # Validation
             self.model.eval()
             running_val_loss = 0.0
+            val_loader = tqdm(self.val_dl, desc=f"Epoch {epoch + 1}/{self.max_epochs} - Validation", leave=False)
             with torch.no_grad():
                 for padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, stop_token_targets in self.val_dl:
                     padded_text_seqs, padded_mel_specs = padded_text_seqs.to(self.device), padded_mel_specs.to(self.device)
@@ -71,6 +75,7 @@ class Trainer():
                     mel_outputs, gate_outputs = self.model(padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, 0)
                     loss = self.criterion(mel_outputs, padded_mel_specs, gate_outputs, stop_token_targets)
                     running_val_loss += loss.item()
+                    val_loader.set_postfix({"Val Loss": loss.item()})
             epoch_val_loss = running_val_loss / len(self.val_dl)
 
             if epoch_val_loss < self.best_val_loss:
