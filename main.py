@@ -83,10 +83,10 @@ if __name__ == "__main__":
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir)
     checkpoint_name = checkpoint_dir+"/TtsSimple"
-    lr = 0.001
+    lr = 1e-3
     weight_decay=1e-6
     optimizer = optim.Adam(tts.parameters(), lr=lr, weight_decay=weight_decay)
     # setup trainer class
     trainer = Trainer(tts, max_epochs, optimizer, loss_fn,
-                      train_dl, val_dl, device, checkpoint_name, teacher_f_ratio=0.5)
+                      train_dl, val_dl, device, checkpoint_name, teacher_f_ratio=0.5, grad_clip=True, max_norm=30)
     trainer.train()
