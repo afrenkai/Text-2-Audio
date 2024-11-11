@@ -2,11 +2,12 @@ from torch import nn
 import torch
 
 class TTS_Loss(nn.Module):
-    def __init__(self):
+    def __init__(self, stop_token_loss_multiplier=5):
         super(TTS_Loss, self).__init__()
         # need proper loss here
         self.mel_loss_mse_sum = torch.nn.MSELoss(reduction='sum')
         self.stop_token_loss_sum = torch.nn.BCEWithLogitsLoss(reduction='sum')
+        self.stop_token_alpha = stop_token_loss_multiplier
 
     def forward(self, mel_output: torch.Tensor, mel_target: torch.Tensor, 
                 stop_token_out: torch.Tensor, stop_token_targets: torch.Tensor, mask:torch.Tensor):
@@ -17,22 +18,23 @@ class TTS_Loss(nn.Module):
             stop_token_targets.requires_grad = False   
             mel_loss = self.mel_loss_mse_sum(mel_output, mel_target)/(n_mels_out*total_not_padding)
             stop_token_loss = self.stop_token_loss_sum(stop_token_out, stop_token_targets)/total_not_padding
-            return mel_loss, stop_token_loss
+            return mel_loss, stop_token_loss*self.stop_token_alpha
 
 class Trainer():
     def __init__(self, model : nn.Module, epochs, optimizer, 
                  criterion, train_dl, val_dl, device, 
-                 checkpoint_name, teacher_f_ratio=0, grad_clip=False, max_norm=5):
+                 checkpoint_prefix, teacher_f_ratio=0, grad_clip=False, max_norm=5):
         self.model = model
         self.optimizer = optimizer
         self.criterion = criterion
         self.teacher_f_ratio = teacher_f_ratio
         self.train_dl = train_dl
         self.val_dl = val_dl
-        self.cp_name = checkpoint_name
+        self.checkpoint_prefix = checkpoint_prefix
         self.max_epochs = epochs
         self.device = device
         self.best_val_loss = float('inf')
+        self.best_train_loss = float('inf')
         self.best_model_state = None
         self.grad_clip = grad_clip
         self.max_norm = max_norm
@@ -64,6 +66,9 @@ class Trainer():
             epoch_loss = running_loss / len(self.train_dl)
             epoch_mel_loss = running_mel_loss / len(self.train_dl)
             epoch_stop_loss = running_stop_loss / len(self.train_dl)
+            if epoch_loss < self.best_train_loss:
+                self.best_train_loss = epoch_loss
+                torch.save(self.model.state_dict(), self.checkpoint_prefix+"_Train.pt")
             # Validation
             self.model.eval()
             running_val_loss = 0.0
@@ -85,8 +90,7 @@ class Trainer():
 
             if epoch_val_loss < self.best_val_loss:
                 self.best_val_loss = epoch_val_loss
-                self.best_model_state_dict = self.model.state_dict()
-                torch.save(self.best_model_state_dict, self.cp_name)
+                torch.save(self.model.state_dict(), self.checkpoint_prefix+"_Validation.pt")
             print(f"Epoch {epoch + 1}/{self.max_epochs},\n"
                   f"Train Loss (total / mel / stop): {epoch_loss, epoch_mel_loss, epoch_stop_loss},\n"
                   f"Valid Loss (total / mel / stop): {epoch_val_loss, epoch_val_mel_loss, epoch_val_stop_loss}\n"

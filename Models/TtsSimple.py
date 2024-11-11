@@ -12,7 +12,6 @@ class TTS_Simple(nn.Module):
         self.mel_bins = mel_bins
         # -----Encoder-----
         self.enc_embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.enc_linear = nn.Linear(embedding_dim, embedding_dim)
         self.enc_conv1 = nn.Conv1d(embedding_dim, embedding_dim, kernel_size=3, padding=1, stride=1, dilation=1)
         self.enc_batch_norm_1 = nn.BatchNorm1d(
             embedding_dim
@@ -23,19 +22,17 @@ class TTS_Simple(nn.Module):
             embedding_dim
         )
         self.enc_dropout_2 = nn.Dropout(0.5)
-        self.enc_lstm = nn.LSTM(embedding_dim, enc_out_size, batch_first=True)
+        self.enc_lstm = nn.LSTM(embedding_dim, enc_out_size, batch_first=True, bidirectional=True)
         
         # -----Decoder-----
-        self.dec_lstm = nn.LSTM(self.mel_bins, enc_out_size, batch_first=True)
-        self.dec_lin_proj = nn.Linear(enc_out_size, self.mel_bins)
-        self.dec_eos_gate = nn.Linear(enc_out_size, 1)
+        self.dec_lstm = nn.LSTM(self.mel_bins, 2*enc_out_size, batch_first=True)
+        self.dec_lin_proj = nn.Linear(2*enc_out_size, self.mel_bins)
+        self.dec_eos_gate = nn.Linear(2*enc_out_size, 1)
 
 
     def forward(self, x: torch.Tensor, text_seq_lens: torch.Tensor, y: torch.Tensor, mel_spec_lens: torch.Tensor, teacher_force_ratio=0.0):
         # ENCODER
         x = self.enc_embedding(x) # batch_size, max_seq_len, embedding_dim
-        # TODO check enforce_sorted logic
-        x = self.enc_linear(x)
         x = x.permute(0, 2, 1)
         # First Conv Layer
         x = self.enc_conv1(x)
@@ -50,6 +47,9 @@ class TTS_Simple(nn.Module):
         x = x.permute(0, 2, 1)
         packed_x = pack_padded_sequence(x , text_seq_lens.cpu().numpy(), batch_first=True, enforce_sorted=False) 
         _, (hidden, cell) = self.enc_lstm(packed_x)
+        # reshape encoder hidden states: (num_directions, batch, hidden) -> (1, batch, num_dir*hidden)
+        hidden = torch.cat(hidden.unbind(), dim=1).unsqueeze(0)
+        cell = torch.cat(cell.unbind(), dim=1).unsqueeze(0)
 
         # DECODER
         # init SOS for decoder input
@@ -130,7 +130,7 @@ class TTS_Simple(nn.Module):
             if torch.nn.functional.sigmoid(dec_gate_output) > stop_token_thresh:
                 break
             if t_step == max_mel_length-1:
-                print('WARNING: max_mel_length reached, model wanted to generate speech for longer')
+                print('WARNING: max_mel_length (800) reached, model wanted to generate longer speech.')
 
         mel_outputs = torch.stack(mel_outputs, dim=1).to(self.device)
         return mel_outputs

@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+import os
 
 
 if __name__ == "__main__":     
@@ -37,15 +38,18 @@ if __name__ == "__main__":
     # hf_val_dataset = hf_split_datadict['train']
     # hf_test_dataset = hf_split_datadict['test']
 
+    print('Train, ', 'Validation, ', 'Test')
     print(len(hf_train_dataset), len(hf_val_dataset), len(hf_test_dataset))
 
     # -- H PARAMS --
     # setup hparams for model
     vocab_size = TTS_DataLoader.symbols_len
-    mel_bins = 128 # possible hyperparameter to choose
+    mel_bins = 96 # possible hyperparameter to choose
     embedding_dim = 256
     enc_out_size = 512
-    batch_size = 128
+
+    # BATCH SIZE
+    batch_size = 64
 
     # convert hf_dataset to pytorch datasets
     train_ds = TTS_DataLoader.LjSpeechDataset(hf_train_dataset, num_mels=mel_bins)
@@ -64,9 +68,8 @@ if __name__ == "__main__":
     tts.to(device)
     print(tts)
 
-    ## Testing Single forward
+    # # Testing forward for a single batch
     # padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, stop_token_targets = next(iter(train_dl))
-    # print(padded_mel_specs.shape)
     # padded_text_seqs, padded_mel_specs = padded_text_seqs.to(device), padded_mel_specs.to(device)
     # mel_out, stop_out, mask = tts.forward(padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, 1)
     # print("In main.py out (mel_out.shape, stop_out.shape, mask.shape) = ", mel_out.shape, stop_out.shape, mask.shape)
@@ -76,11 +79,14 @@ if __name__ == "__main__":
     
     loss_fn = TTS_Loss()
     max_epochs = 100
-    checkpoint_name = "TtsSimple.pt"
+    checkpoint_dir = 'checkpoints'
+    if not os.path.exists(checkpoint_dir):
+        os.makedirs(checkpoint_dir)
+    checkpoint_name = checkpoint_dir+"/TtsSimple"
     lr = 0.001
     weight_decay=1e-6
-
+    optimizer = optim.Adam(tts.parameters(), lr=lr, weight_decay=weight_decay)
     # setup trainer class
-    trainer = Trainer(tts, max_epochs, optim.Adam(tts.parameters(), lr=lr, weight_decay=weight_decay), loss_fn,
-                      train_dl, val_dl, device, checkpoint_name, teacher_f_ratio=0.3)
+    trainer = Trainer(tts, max_epochs, optimizer, loss_fn,
+                      train_dl, val_dl, device, checkpoint_name, teacher_f_ratio=0.5)
     trainer.train()
