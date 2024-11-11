@@ -1,7 +1,6 @@
-numpy==2.0
+numpy
 torch
 torchaudio
-numpy
 matplotlib
 seaborn
 pandas
