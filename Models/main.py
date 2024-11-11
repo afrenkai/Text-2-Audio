@@ -115,8 +115,8 @@ if __name__ == "__main__":
     selected_model = 'transformer'
     model_class = model_classes[selected_model]
     model_config = transformer_config if selected_model == 'transformer' else simple_config
-    batch_size = 32
-    lr = 0.001
+    batch_size = 64
+    lr = 0.01
     max_epochs = 10
     checkpoint_name = f"{selected_model}_TtsModel.pt"
     weight_decay = 1e-4
