@@ -21,11 +21,11 @@ class TTS_Loss(nn.Module):
             return mel_loss, stop_token_loss*self.stop_token_alpha
 
 class Trainer():
-    def __init__(self, model : nn.Module, epochs, optimizer, 
+    def __init__(self, model : nn.Module, epochs, optimizers: list, 
                  criterion, train_dl, val_dl, device, 
                  checkpoint_prefix, teacher_f_ratio=0, grad_clip=False, max_norm=5):
         self.model = model
-        self.optimizer = optimizer
+        self.optimizers = optimizers
         self.criterion = criterion
         self.teacher_f_ratio = teacher_f_ratio
         self.train_dl = train_dl
@@ -51,7 +51,8 @@ class Trainer():
             for padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, stop_token_targets in self.train_dl:
                 padded_text_seqs, padded_mel_specs = padded_text_seqs.to(self.device), padded_mel_specs.to(self.device)
                 stop_token_targets = stop_token_targets.to(self.device)
-                self.optimizer.zero_grad()
+                for op in self.optimizers:
+                    op.zero_grad()
                 mel_outputs, gate_outputs, mask = self.model(padded_text_seqs, text_seq_lens,
                                                             padded_mel_specs, mel_spec_lens, self.teacher_f_ratio)
                 mel_loss, stop_token_loss = self.criterion(mel_outputs, padded_mel_specs, gate_outputs, stop_token_targets, mask)
@@ -59,7 +60,8 @@ class Trainer():
                 loss.backward()
                 if self.grad_clip:
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_norm)
-                self.optimizer.step()
+                for op in self.optimizers:
+                    op.step()
                 running_loss += loss.item()
                 running_mel_loss += mel_loss.item()
                 running_stop_loss += stop_token_loss.item()

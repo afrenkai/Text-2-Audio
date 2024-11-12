@@ -45,48 +45,53 @@ if __name__ == "__main__":
     # setup hparams for model
     vocab_size = TTS_DataLoader.symbols_len
     mel_bins = 96 # possible hyperparameter to choose
-    embedding_dim = 256
-    enc_out_size = 512
+    embedding_dim = 128
+    enc_hidden_size = 256
 
     # BATCH SIZE
-    batch_size = 64
+    batch_size = 16
 
     # convert hf_dataset to pytorch datasets
     train_ds = TTS_DataLoader.LjSpeechDataset(hf_train_dataset, num_mels=mel_bins)
     val_ds = TTS_DataLoader.LjSpeechDataset(hf_val_dataset, num_mels=mel_bins)
     test_ds = TTS_DataLoader.LjSpeechDataset(hf_test_dataset, num_mels=mel_bins)
     # convert datasets to dataloader
-    train_dl = TTS_DataLoader.get_data_loader(train_ds, batch_size, num_workers=4)
-    val_dl = TTS_DataLoader.get_data_loader(val_ds, batch_size, shuffle=False, num_workers=2)
-    test_dl = TTS_DataLoader.get_data_loader(test_ds, batch_size, shuffle=False, num_workers=2)
+    train_dl = TTS_DataLoader.get_data_loader(train_ds, batch_size, num_workers=3)
+    val_dl = TTS_DataLoader.get_data_loader(val_ds, batch_size, shuffle=False, num_workers=1)
+    test_dl = TTS_DataLoader.get_data_loader(test_ds, batch_size, shuffle=False, num_workers=1)
 
     # init model
-    tts = TTS_Simple(device, vocab_size, embedding_dim, enc_out_size, mel_bins)
+    tts = TTS_Simple(device, vocab_size, embedding_dim, enc_hidden_size, 
+                     encoder_bidirectional=True, mel_bins=mel_bins, dropout_encoder=0.5)
     model_parameters = filter(lambda p: p.requires_grad, tts.parameters())
     num_params = sum([np.prod(p.size()) for p in model_parameters])
     print(f"Model has {num_params} trainable parameters")
     tts.to(device)
     print(tts)
 
-    # # Testing forward for a single batch
-    # padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, stop_token_targets = next(iter(train_dl))
-    # padded_text_seqs, padded_mel_specs = padded_text_seqs.to(device), padded_mel_specs.to(device)
-    # mel_out, stop_out, mask = tts.forward(padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, 1)
-    # print("In main.py out (mel_out.shape, stop_out.shape, mask.shape) = ", mel_out.shape, stop_out.shape, mask.shape)
+    # Testing forward for a single batch
+    padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, stop_token_targets = next(iter(train_dl))
+    padded_text_seqs, padded_mel_specs = padded_text_seqs.to(device), padded_mel_specs.to(device)
+    mel_out, stop_out, mask = tts.forward(padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, 1)
+    print("In main.py out (mel_out.shape, stop_out.shape, mask.shape) = ", mel_out.shape, stop_out.shape, mask.shape)
 
 
-    # trainer hyper params
-    
-    loss_fn = TTS_Loss()
-    max_epochs = 100
-    checkpoint_dir = 'checkpoints'
-    if not os.path.exists(checkpoint_dir):
-        os.makedirs(checkpoint_dir)
-    checkpoint_name = checkpoint_dir+"/TtsSimple"
-    lr = 1e-3
-    weight_decay=1e-6
-    optimizer = optim.Adam(tts.parameters(), lr=lr, weight_decay=weight_decay)
-    # setup trainer class
-    trainer = Trainer(tts, max_epochs, optimizer, loss_fn,
-                      train_dl, val_dl, device, checkpoint_name, teacher_f_ratio=0.5, grad_clip=True, max_norm=30)
-    trainer.train()
+    # # Trainer hyper params
+    # loss_fn = TTS_Loss()
+    # max_epochs = 100
+    # lr = 1e-2
+    # decoder_lr_multiplier = 2
+    # weight_decay=1e-6
+    # encoder_optimizer = optim.Adam(tts.encoder.parameters(), lr=lr, weight_decay=weight_decay)
+    # decoder_optimizer = optim.Adam(tts.decoder.parameters(), lr=decoder_lr_multiplier*lr,
+    #                                weight_decay=weight_decay)
+    # optimizers = [encoder_optimizer, decoder_optimizer]
+    # # Checkpoint location
+    # checkpoint_dir = 'checkpoints'
+    # if not os.path.exists(checkpoint_dir):
+    #     os.makedirs(checkpoint_dir)
+    # checkpoint_name = checkpoint_dir+"/TtsSimple"
+    # # setup trainer class
+    # trainer = Trainer(tts, max_epochs, optimizers, loss_fn,
+    #                   train_dl, val_dl, device, checkpoint_name, teacher_f_ratio=0.5, grad_clip=True, max_norm=50)
+    # trainer.train()

@@ -8,8 +8,9 @@ import warnings
 from speech_utils import SpeechConverter
 
 EOS = 'EOS'
+PAD = 'PAD'
 symbols = [
-    EOS, ' ', '!', ',', '-', '.', \
+    PAD, EOS, ' ', '!', ',', '-', '.', \
     ';', '?', 'a', 'b', 'c', 'd', 'e', 'f', \
     'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', \
     'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'à', \
@@ -68,8 +69,11 @@ class LjSpeechDataset(Dataset):
 
 
 def speech_collate_fn(batch):
+    # sort the batch based on input text (this is needed for pack_padded_sequence)
+    batch.sort(key=lambda x: len(x[0]), reverse=True)
     text_seqs, mel_specs = zip(*batch)
     text_seq_lens = [text_seq.shape[-1] for text_seq in text_seqs] # batch first
+   
     mel_specs_t = []
     mel_spec_lens = []
     max_mel_seq = -1
@@ -79,20 +83,18 @@ def speech_collate_fn(batch):
         mel_spec_lens.append(true_mel_size)
         if true_mel_size > max_mel_seq:
             max_mel_seq = true_mel_size
-
     # need to know max size to pad to/ generate stop token input
     stop_token_targets = []
     for i in range(len(mel_specs)):
         stop_token_target = torch.zeros(max_mel_seq)
         true_mel_size = mel_spec_lens[i]
-        stop_token_target[true_mel_size:] = 1
-        # stop_token_target[-1] = 1 # TODO: case when true = max; should last value always be eos?
+        stop_token_target[true_mel_size-1:] = 1
         stop_token_targets.append(stop_token_target)
     
     # pad sequence so pytorch can batch them together
     # alternatives using the minimum from the batch
     # this is using the right padding for samples that have seq_len < max_batch_seq_len   
-    padded_text_seqs = pad_sequence(text_seqs, batch_first=True, padding_value=0)
+    padded_text_seqs = pad_sequence(text_seqs, batch_first=True, padding_value=symbol_to_idx.get(PAD))
     padded_mel_specs = pad_sequence(mel_specs_t, batch_first=True, padding_value=0)
     text_seq_lens = torch.IntTensor(text_seq_lens)
     mel_spec_lens = torch.IntTensor(mel_spec_lens)
