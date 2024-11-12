@@ -44,7 +44,6 @@ class Encoder(nn.Module):
         output, _ = pad_packed_sequence(output, batch_first=True)
         if self.bidirectional:
             output = output[:,:,:self.hidden_size] + output[:,:,self.hidden_size:] 
-        print("Encoder Output shapes", output.shape, hidden.shape)
         return output, hidden
 
 # Luong et al. Global attention
