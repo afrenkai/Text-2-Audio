@@ -11,5 +11,4 @@
 module load cuda
 module load python/3.10.13
 source ~/Text-2-Audio/kdd4/bin/activate
-cd Models
 python main.py
