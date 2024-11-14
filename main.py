@@ -46,7 +46,7 @@ if __name__ == "__main__":
     lr = 1e-4
     weight_decay = 1e-6
     max_epochs = 200 
-    subsample_ratio = 0.2 # For testing arch
+    subsample_ratio = 0.2 # For testing arch (value of None for actual training)
 
     # setup training pipeline
     Pipeline(model_name, mel_bins, batch_size, lr, max_epochs, weight_decay, checkpoint_prefix,
