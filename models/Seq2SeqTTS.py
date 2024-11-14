@@ -6,9 +6,8 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import torchaudio.transforms as T
 
 class Encoder(nn.Module):
-    def __init__(self, device, vocab_size, embedding_dim, hidden_size, dropout=0.0, bidirectional=True):
+    def __init__(self, vocab_size, embedding_dim, hidden_size, dropout=0.0, bidirectional=True):
         super(Encoder, self).__init__()
-        self.device = device
         self.bidirectional = bidirectional
         self.hidden_size = hidden_size
         self.enc_embedding = nn.Embedding(vocab_size, embedding_dim)
@@ -62,9 +61,8 @@ class Attention(nn.Module):
         return probs
 
 class Decoder(nn.Module)    :
-    def __init__(self, device, hidden_size, mel_bins=128, dropout=0.2, num_layers=2, encoder_bidirectional=True):
+    def __init__(self, hidden_size, mel_bins=128, dropout=0.2, num_layers=2, encoder_bidirectional=True):
         super(Decoder, self).__init__()
-        self.device = device
         self.mel_bins = mel_bins
         self.encoder_bidirectional = encoder_bidirectional
         self.num_layers = num_layers
@@ -88,6 +86,7 @@ class Decoder(nn.Module)    :
     def forward(self, encoder_hidden: torch.Tensor, encoder_outputs: torch.Tensor, 
                 y: torch.Tensor, mel_spec_lens: torch.Tensor, teacher_force_ratio=0.0):
         dec_input = self.get_decoder_sos(y.size(0), y.size(2)) # batch, 1, n_mels
+        dec_input = dec_input.to(y.device)
         mel_outputs = []
         gate_outputs = []
         # iterate time_dim (i.e. max_mel_length of batch)
@@ -121,40 +120,38 @@ class Decoder(nn.Module)    :
         return masked_mel_outputs, masked_gate_outputs, mask
 
     def get_decoder_sos(self, batch_size, n_mels):
-        return torch.zeros(batch_size, 1, n_mels).to(self.device) # batch, 1, n_mels
+        return torch.zeros(batch_size, 1, n_mels) # batch, 1, n_mels
 
     def mask_output(self, mel_outputs: torch.Tensor, gate_outputs: torch.Tensor, mel_spec_lens: torch.Tensor, max_mel_len):
-        mask = self.get_mask(mel_spec_lens, max_mel_len)
+        mask = self.get_mask(mel_spec_lens, max_mel_len).to(mel_outputs.device)
         masked_mel_outputs = mel_outputs.masked_fill(mask.unsqueeze(-1), 0)
         masked_gate_outputs = gate_outputs.masked_fill(mask, 1e3) # Sigmoid will convert masked logit to probability ≈ 1.0   
         return masked_mel_outputs, masked_gate_outputs, mask
 
     def get_mask(self, mel_spec_lens, max_mel_len):
         base_mask = torch.arange(max_mel_len).expand(mel_spec_lens.size(0), max_mel_len).T
-        mask = (base_mask > mel_spec_lens).to(self.device).permute(1,0).to(self.device)
+        mask = (base_mask > mel_spec_lens).permute(1,0)
         return mask
 
 
-class TTS_Simple(nn.Module):
-    def __init__(self, device, vocab_size, embedding_dim, 
+class Seq2SeqTTS(nn.Module):
+    def __init__(self, vocab_size, embedding_dim, 
                 enc_hidden_size, encoder_bidirectional=True, dropout_encoder=0.0, mel_bins=128, dropout_decoder=0.0):
-        super(TTS_Simple, self).__init__()
-        self.device = device
+        super(Seq2SeqTTS, self).__init__()
         self.mel_bins = mel_bins
         self.encoder_bidirectional = encoder_bidirectional
         # -----Encoder-----
         # Embedding -> Convolutions -> LSTM
-        self.encoder = Encoder(self.device, vocab_size, embedding_dim, enc_hidden_size, 
+        self.encoder = Encoder(vocab_size, embedding_dim, enc_hidden_size, 
                 dropout=dropout_encoder, bidirectional=encoder_bidirectional)
         
         # -----Decoder-----
         # Encoder Memory -> LSTM -> (mel_spec and stop tokens)
-        self.decoder = Decoder(device, enc_hidden_size, mel_bins, dropout_decoder, 
+        self.decoder = Decoder(enc_hidden_size, mel_bins, dropout_decoder, 
                 encoder_bidirectional=encoder_bidirectional)
 
     def forward(self, x: torch.Tensor, text_seq_lens: torch.Tensor, y: torch.Tensor, mel_spec_lens: torch.Tensor, teacher_force_ratio=0.0):
         encoder_outputs , hidden  = self.encoder(x, text_seq_lens)
-
         # DECODER
         masked_mel_outputs, masked_gate_outputs, mask = self.decoder(hidden, encoder_outputs, y, mel_spec_lens, teacher_force_ratio)
         return masked_mel_outputs, masked_gate_outputs, mask

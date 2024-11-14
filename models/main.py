@@ -1,4 +1,3 @@
-from TtsSimpleTest import TTS_Simple
 from TtsTransformers import TTSTransformers
 from Trainer import Trainer, TTS_Loss
 import TTS_DataLoader
@@ -7,20 +6,17 @@ import torch
 import torch.optim as optim
 import numpy as np
 
-
 class Pipeline:
     def __init__(self, model_class, model_config, batch_size, lr, max_epochs, weight_decay, checkpoint_name):
         self.model_config = model_config
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print('Using device:', self.device)
-        self.model = model_class(**model_config).to(self.device)
-
+        self.model = model_class(**model_config).to(self.device) # why not setup model outside?
         self.batch_size = batch_size
         self.lr = lr
         self.max_epochs = max_epochs
         self.weight_decay = weight_decay
         self.checkpoint_name = checkpoint_name
-
         self.loss_fn = TTS_Loss()
 
     def load_data(self):
@@ -83,34 +79,18 @@ class Pipeline:
 
 
 if __name__ == "__main__":
-    common_config = {
-        'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-        'vocab_size': TTS_DataLoader.symbols_len,
-        'mel_bins': 64,
-        'embedding_dim': 64,
-    }
-
-    transformer_config = {
-        'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-        'vocab_size': TTS_DataLoader.symbols_len,
-        'mel_bins': 64,  # Set mel_bins to match d_model for decoder
-        'embedding_dim': 64,
-        'n_heads_enc': 8,
-        'n_heads_dec': 8,
-        'num_encoder_layers': 2,
-        'num_decoder_layers': 2,
-        'dim_ffn': 256
-    }
-
-    simple_config = {
-        **common_config,
-        'enc_out_size': 128,
-    }
-
-    model_classes = {
-        'simple': TTS_Simple,
-        'transformer': TTSTransformers
-    }
+    # transformer_config = {
+    #     'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
+    #     'vocab_size': TTS_DataLoader.symbols_len,
+    #     'mel_bins': 64,  # Set mel_bins to match d_model for decoder
+    #     'embedding_dim': 64,
+    #     'n_heads_enc': 8,
+    #     'n_heads_dec': 8,
+    #     'num_encoder_layers': 2,
+    #     'num_decoder_layers': 2,
+    #     'dim_ffn': 256
+    # }
+    
 
     selected_model = 'transformer'
     model_class = model_classes[selected_model]
@@ -119,7 +99,7 @@ if __name__ == "__main__":
     lr = 0.01
     max_epochs = 10
     checkpoint_name = f"{selected_model}_TtsModel.pt"
-    weight_decay = 1e-4
+    weight_decay = 1e-6
 
     pipeline = Pipeline(model_class,
                         model_config,
