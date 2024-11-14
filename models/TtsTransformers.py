@@ -9,12 +9,12 @@ class TTSTransformers(nn.Module):
                  device,
                  vocab_size,
                  embedding_dim,
-                 mel_bins,
                  n_heads_enc,
                  n_heads_dec,
                  num_encoder_layers,
                  num_decoder_layers,
-                 dim_ffn):
+                 dim_ffn,
+                 mel_bins=128):
         super(TTSTransformers, self).__init__()
         self.device = device
         # ENCODER

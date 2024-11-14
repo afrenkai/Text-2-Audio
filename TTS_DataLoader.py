@@ -4,7 +4,7 @@ from datasets import Dataset as HfDataset
 from torchaudio.transforms import MelSpectrogram
 from typing import Tuple
 from torch.nn.utils.rnn import pad_sequence
-import warnings
+from datasets import load_dataset
 from speech_utils import SpeechConverter
 
 EOS = 'EOS'
@@ -64,9 +64,6 @@ class LjSpeechDataset(Dataset):
         mel_spec = self.speech_converter.convert_to_mel_spec(audio_waveform)
         
         return text_seq, mel_spec
-    
-
-
 
 def speech_collate_fn(batch):
     # sort the batch based on input text (this is needed for pack_padded_sequence)
@@ -105,3 +102,28 @@ def speech_collate_fn(batch):
 def get_data_loader(dataset: HfDataset, batch_size, shuffle=True, num_workers=0) -> DataLoader:
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=speech_collate_fn, 
                       num_workers=num_workers)
+
+def load_data(batch_size, mel_bins=128, subsample_ratio=None):
+    # load dataset
+    hf_dataset = load_dataset('keithito/lj_speech')['train']
+    if subsample_ratio is not None: # Used for testing model arch
+        hf_dataset = hf_dataset.train_test_split(train_size=subsample_ratio)['train']
+    hf_dataset.set_format(type="torch", columns=["audio"], output_all_columns=True)
+    # split dataset into training and (validation+test) set
+    hf_split_datadict = hf_dataset.train_test_split(test_size=0.2)
+    hf_train_dataset = hf_split_datadict['train']
+    # split (validation+test) dataset into validation and test set
+    hf_dataset = hf_split_datadict['test']
+    hf_split_datadict = hf_dataset.train_test_split(test_size=0.5)
+    hf_val_dataset = hf_split_datadict['train']
+    hf_test_dataset = hf_split_datadict['test']
+    print(f'Dataset Sizes: Train ({len(hf_train_dataset)}), Val ({len(hf_val_dataset)}), Test ({len(hf_test_dataset)})')
+    # convert hf_dataset to pytorch datasets
+    train_ds = LjSpeechDataset(hf_train_dataset, num_mels=mel_bins)
+    val_ds = LjSpeechDataset(hf_val_dataset, num_mels=mel_bins)
+    test_ds = LjSpeechDataset(hf_test_dataset, num_mels=mel_bins)
+    # convert datasets to dataloader
+    train_dl = get_data_loader(train_ds, batch_size, num_workers=3)
+    val_dl = get_data_loader(val_ds, batch_size, shuffle=False, num_workers=1)
+    test_dl = get_data_loader(test_ds, batch_size, shuffle=False, num_workers=1)
+    return train_dl, val_dl, test_dl

@@ -13,3 +13,4 @@ librosa
 soundfile
 scipy
 datasets[audio]
+tensorboard
