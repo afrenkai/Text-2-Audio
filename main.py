@@ -1,7 +1,6 @@
 from Trainer import Trainer, TTS_Loss
 import TTS_DataLoader
 import torch
-import torch.optim as optim
 import numpy as np
 import os
 from model_loader import get_model, get_optimizer_list

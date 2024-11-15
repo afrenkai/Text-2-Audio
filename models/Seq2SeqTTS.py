@@ -30,12 +30,12 @@ class Encoder(nn.Module):
         # First Conv Layer
         x = self.enc_conv1(x)
         x = self.enc_batch_norm_1(x)
-        x = nn.functional.leaky_relu(x)
+        x = nn.functional.relu(x)
         x = self.enc_dropout_1(x)
         # Second Conv Layer
         x = self.enc_conv2(x)
         x = self.enc_batch_norm_2(x)
-        x = nn.functional.leaky_relu(x)
+        x = nn.functional.relu(x)
         x = self.enc_dropout_2(x)
         x = x.permute(0, 2, 1)
         packed_x = pack_padded_sequence(x , text_seq_lens.cpu().numpy(), batch_first=True) 
