@@ -190,7 +190,7 @@ class Decoder(nn.Module):
     def forward(self, enc_outputs: torch.Tensor, text_lens: torch.Tensor, max_text_len: int, 
                 mel_spec_true: torch.Tensor, mel_spec_lens: torch.Tensor, teacher_force_ratio=0.0):
         self.init_decoder_states(enc_outputs) # initialize hidden layers and keys for attention
-        enc_mask = get_mask_from_lens(text_lens, max_text_len)
+        enc_mask = get_mask_from_lens(text_lens, max_text_len).to(enc_outputs.device)
         dec_input = self.pre_net(self.get_decoder_sos(mel_spec_true)).unsqueeze(1) # batch, 1, n_mels (SOS)
         pre_net_out = self.pre_net(mel_spec_true)
         mel_outputs = []
