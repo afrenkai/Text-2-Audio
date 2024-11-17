@@ -154,7 +154,7 @@ class Trainer():
     def log_sound(self, sample_mel, input_seq, step_number, loss_type: LossType):
         name = self.get_log_name(loss_type)
         txt = seq_to_text(input_seq)
-        self.writer.add_audio(f'{name}.audio', self.sc.inverse_mel_spec_to_wav(sample_mel.permute(1,0)), step_number)
+        self.writer.add_audio(f'{name}.audio', self.sc.inverse_mel_spec_to_wav(sample_mel.permute(1,0).cpu()), step_number)
         self.writer.add_text(f'{name}.text', txt, step_number)
 
 
