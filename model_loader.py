@@ -1,6 +1,6 @@
-from models.Seq2SeqTTS import Seq2SeqTTS
-from models.TtsTransformers import TTSTransformers
-from models.SimpleTransformer import SimpleTTS
+from Models.Seq2SeqTTS import Seq2SeqTTS
+from Models.TtsTransformers import TTSTransformers
+from Models.SimpleTransformer import SimpleTTS
 from TTS_DataLoader import symbols_len
 from torch.optim import Adam
 from torch import nn
@@ -22,12 +22,13 @@ transformer_config = {
         }
 simple_config = {
     'text_num_embeddings': 2 * symbols_len,
-    'embedding_size' : 256,
     'encoder_embedding_size': 512,
-    'dim_feedforward' : 1024,
+    'dim_feedforward': 1024,
+    'embedding_size' : 256,
+    'postnet_kernel_size' : 5,
     'postnet_embedding_size' : 1024,
     'encoder_kernel_size' : 3,
-    'postnet_kernel_size' : 5
+
 }
 
 def get_model(model_name: str, mel_bins) -> nn.Module:
@@ -37,7 +38,7 @@ def get_model(model_name: str, mel_bins) -> nn.Module:
     elif model_name == 'TransformerTTS':
         model =  TTSTransformers(mel_bins=mel_bins, **transformer_config)
     elif model_name == 'SimpleTTS':
-        model = TTSTransformers(mel_bins = mel_bins, **simple_config)
+        model = SimpleTTS(mel_bins = mel_bins, **simple_config)
     else:
         raise ValueError('Invalid model name for model hyper params.')
     return model

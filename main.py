@@ -26,14 +26,14 @@ class Pipeline:
     def run(self):
         self.model_info()
         self.trainer.train()
-        self.trainer.evaluate()
+        self.trainer.evaluate_on_test()
 
 
 Seq2SeqTTS = 'Seq2SeqTTS'
 TransformerTTS = 'TransformerTTS'
-
+SimpleTTS = 'SimpleTTS'
 if __name__ == "__main__":
-    model_name = Seq2SeqTTS  # Model name  
+    model_name = SimpleTTS  # Model name
     # Checkpoint location
     checkpoint_dir = f'checkpoints/{model_name}'
     if not os.path.exists(checkpoint_dir):

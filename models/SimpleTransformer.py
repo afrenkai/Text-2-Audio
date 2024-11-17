@@ -163,7 +163,9 @@ class DecoderBlock(nn.Module):
 
 
 class EncoderPreNet(nn.Module):
-    def __init__(self, text_num_embeddings, encoder_embedding_size ):
+    def __init__(self, text_num_embeddings, embedding_size, encoder_embedding_size, encoder_kernel_size):
+        self.encoder_kernel_size = encoder_kernel_size
+        self.embedding_size = embedding_size
         self.text_num_embeddings = text_num_embeddings
         self.encoder_embedding_size =encoder_embedding_size
         super(EncoderPreNet, self).__init__()
@@ -250,7 +252,8 @@ class EncoderPreNet(nn.Module):
 
 
 class PostNet(nn.Module):
-    def __init__(self, postnet_kernel_size, postnet_embedding_size):
+    def __init__(self, postnet_kernel_size, postnet_embedding_size, mel_freq):
+        self.mel_freq = mel_freq
         self.postnet_kernel_size = postnet_kernel_size
         self.postnet_embedding_size = postnet_embedding_size
         super(PostNet, self).__init__()
@@ -399,22 +402,23 @@ class DecoderPreNet(nn.Module):
 
 
 class SimpleTTS(nn.Module):
-    def __init__(self, text_num_embeddings, encoder_embedding_size, mel_freq, dim_feedforward, embedding_size, postnet_kernel_size, postnet_embedding_size, max_mel_time, device="cuda" ):
-        self.num_text_embeddings = text_num_embeddings
+    def __init__(self, mel_bins, text_num_embeddings, encoder_embedding_size,  dim_feedforward, embedding_size, postnet_kernel_size, postnet_embedding_size,  encoder_kernel_size, max_mel_time=1024, device="cuda" ):
+        self.text_num_embeddings = text_num_embeddings
         self.dim_feedforward = dim_feedforward
         self.max_mel_time = max_mel_time
         self.encoder_embedding_size = encoder_embedding_size
         self.postnet_kernel_size = postnet_kernel_size
         self.embedding_size = embedding_size
-        self.mel_freq = mel_freq
+        self.mel_freq = mel_bins
         self.postnet_embedding_size = postnet_embedding_size
         self.device = device
+        self.encoder_kernel_size = encoder_kernel_size
 
         super(SimpleTTS, self).__init__()
 
-        self.encoder_prenet = EncoderPreNet(self.text_num_embeddings, self.encoder_embedding_size )
+        self.encoder_prenet = EncoderPreNet(self.text_num_embeddings, self.encoder_embedding_size, self.encoder_kernel_size, self.embedding_size )
         self.decoder_prenet = DecoderPreNet(self.mel_freq, self.embedding_size )
-        self.postnet = PostNet(postnet_kernel_size, postnet_embedding_size)
+        self.postnet = PostNet(self.postnet_kernel_size, self.postnet_embedding_size, self.mel_freq)
 
         self.pos_encoding = nn.Embedding(
             num_embeddings=self.max_mel_time,
