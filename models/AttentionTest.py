@@ -102,8 +102,8 @@ class Seq2SeqTest(nn.Module):
         dec_hidden = enc_hidden.view(batch_size, 1, -1)
         print(dec_hidden[0])
         print('enc', out.shape, dec_hidden.shape)
-        dec_input = torch.zeros(batch_size, 1, 2).to(DEVICE)
-        context, weights =  self.add_attention(dec_hidden, out)
+        dec_input = torch.zeros(batch_size, 1, 2).to(DEVICE) # <SOS>
+        context, weights =  self.add_attention(dec_hidden, out) 
         print(weights.shape)
         out, dec_hidden = self.decoder(dec_input, context) # passing in the last hidden of the encoder
         print('dec', out.shape, dec_hidden.shape)

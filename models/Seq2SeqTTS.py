@@ -6,15 +6,14 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import torchaudio.transforms as T
 
 def get_mask_from_lens(lens, max_len):
-    base_mask = torch.arange(lens).expand(lens.size(0), max_len).T
+    base_mask = torch.arange(max_len).expand(lens.size(0), max_len).T
     mask = (base_mask > lens).permute(1,0)
     return mask
 
 
 class Encoder(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, hidden_size, dropout=0.0, bidirectional=True):
+    def __init__(self, vocab_size, embedding_dim, hidden_size, dropout=0.0):
         super(Encoder, self).__init__()
-        self.bidirectional = bidirectional
         self.hidden_size = hidden_size
         self.enc_embedding = nn.Embedding(vocab_size, embedding_dim)
         self.enc_conv1 = nn.Conv1d(embedding_dim, embedding_dim, kernel_size=3, padding=1, stride=1, dilation=1)
@@ -27,7 +26,7 @@ class Encoder(nn.Module):
             embedding_dim
         )
         self.enc_dropout_2 = nn.Dropout(dropout)
-        self.enc_rnn = nn.GRU(embedding_dim, hidden_size, batch_first=True, bidirectional=self.bidirectional)
+        self.enc_rnn = nn.GRU(embedding_dim, hidden_size, batch_first=True, bidirectional=True)
 
     def forward(self, x: torch.Tensor, text_seq_lens: torch.Tensor):
         # ENCODER
@@ -47,15 +46,13 @@ class Encoder(nn.Module):
         packed_x = pack_padded_sequence(x , text_seq_lens.cpu().numpy(), batch_first=True) 
         output, hidden = self.enc_rnn(packed_x)
         output, _ = pad_packed_sequence(output, batch_first=True)
-        if self.bidirectional:
-            output = output[:,:,:self.hidden_size] + output[:,:,self.hidden_size:] 
         return output, hidden
 
 class LocationLayer(nn.Module):
     def __init__(self, attention_dim,  n_filters=32, location_kernel_size=32):
         super(LocationLayer, self).__init__()
         valid_padding = int((location_kernel_size - 1) / 2)
-        self.conv = nn.Conv1d(2, n_filters, location_kernel_size=location_kernel_size, stride=1, padding=valid_padding, bias=False)
+        self.conv = nn.Conv1d(2, n_filters, location_kernel_size, stride=1, padding=valid_padding, bias=False)
         self.location_proj = nn.Linear(n_filters, attention_dim)
         torch.nn.init.xavier_uniform_(
             self.location_proj.weight,
@@ -65,9 +62,9 @@ class LocationLayer(nn.Module):
             gain=torch.nn.init.calculate_gain('tanh'))
 
     def forward(self, attention_weights_cat):
-        processed_attention = self.conv(attention_weights_cat) # TODO what is the shape of this???
-        processed_attention = processed_attention.transpose(1, 2) # TODO shape
-        processed_attention = self.location_proj(processed_attention) # TODO shape
+        processed_attention = self.conv(attention_weights_cat) 
+        processed_attention = processed_attention.transpose(1, 2) 
+        processed_attention = self.location_proj(processed_attention) 
         return processed_attention
 
 # Bahdanau Attention (Additive) + Location Layer
@@ -77,7 +74,7 @@ class LocationSensitiveAttention(nn.Module):
         self.dec_hidden_size = dec_hidden_size # hidden size of the decoder (first decoder layer if l > 1)
         self.enc_hidden_size = enc_hidden_size # hidden size of the encoder (hidden states from both directions)
         self.query_proj = nn.Linear(dec_hidden_size, attention_dim, bias=False) # project decoder hidden to attention dim
-        self.keys_proj = nn.Linear(enc_hidden_size, attention_dim, bias=False)  # project all hidden encoder states to attention dim
+        self.keys_proj = nn.Linear(enc_hidden_size*2, attention_dim, bias=False)  # project all hidden encoder states to attention dim
         self.score_proj = nn.Linear(attention_dim, 1, bias=False) # alignment score
         self.location = LocationLayer(attention_dim, n_filters=n_filters, location_kernel_size=location_kernel_size)
         self.init_weights() # optimize gain for the activation function used
@@ -89,7 +86,7 @@ class LocationSensitiveAttention(nn.Module):
             gain=torch.nn.init.calculate_gain('tanh'))
         # passed to tanh
         torch.nn.init.xavier_uniform_(
-            self.key_proj.weight,
+            self.keys_proj.weight,
             gain=torch.nn.init.calculate_gain('tanh'))
         # final linear proj
         torch.nn.init.xavier_uniform_(
@@ -99,11 +96,7 @@ class LocationSensitiveAttention(nn.Module):
     def get_score(self, query: torch.Tensor, keys_projected: torch.Tensor, att_weights_combined: torch.Tensor) -> torch.Tensor:
         projected_query = self.query_proj(query)
         processed_location = self.location(att_weights_combined)
-        print('projected_query', projected_query.shape)
-        print('projected_keys', keys_projected.shape)
-        print('processed_location', processed_location.shape)
         scores = self.score_proj(torch.tanh(projected_query + keys_projected + processed_location))
-        print('Scores', scores.shape)
         return scores
 
 
@@ -112,12 +105,12 @@ class LocationSensitiveAttention(nn.Module):
         scores = self.get_score(query, keys_projected, att_weights_combined)
         # mask scores for padding
         if key_mask is not None:
-            scores = scores.masked_fill(key_mask, -1*float('inf')) 
+            scores = scores.masked_fill(key_mask.unsqueeze(2), -1*float('inf'))
         # calculate weights and context
-        weights = nn.functional.softmax(scores, dim=1).unsqueeze(1)
+        weights = nn.functional.softmax(scores, dim=1).permute(0,2,1)
         context = torch.bmm(weights, keys_projected)
         # return context (used by decoder), and weights (for cumulative weights) for next location layer
-        return context, weights
+        return context, weights.squeeze(1)
     
 # Pseudo-embedding layer for mel frame 
 class DecoderPreNet(nn.Module):
@@ -127,9 +120,9 @@ class DecoderPreNet(nn.Module):
         self.out_proj = nn.Linear(out_size, out_size, bias=False)
 
     def forward(self, mel_frames: torch.Tensor) -> torch.Tensor:
-        out = self.input_proj(mel_frames)
+        out = nn.functional.relu(self.input_proj(mel_frames))
         out = nn.functional.dropout(out, 0.5, True) # force dropout even during inference 
-        out = self.out_proj(out)
+        out =  nn.functional.relu(self.out_proj(out))
         out = nn.functional.dropout(out, 0.5, True) # force dropout even during inference 
         return out
 
@@ -161,12 +154,12 @@ class Decoder(nn.Module):
         batch_size = encoder_out.size(0)
         max_encoder_time = encoder_out.size(1)
         
-        self.attn_rnn_hidden =  nn.Parameter(encoder_out.new_zeros(batch_size, self.decoder_hidden_size))
-        self.out_rnn_hidden =  nn.Parameter(encoder_out.new_zeros(batch_size, self.decoder_hidden_size))
+        self.attn_rnn_hidden =  encoder_out.new_zeros(batch_size, self.decoder_hidden_size).unsqueeze(0)
+        self.out_rnn_hidden = encoder_out.new_zeros(batch_size, self.decoder_hidden_size).unsqueeze(0)
         # initialize attention weights
-        self.attention_weights =  nn.Parameter(encoder_out.new_zeros(batch_size, max_encoder_time))
-        self.attention_cumulative = nn.Parameter(encoder_out.new_zeros(batch_size, max_encoder_time))
-        self.attn_context = nn.Parameter(encoder_out.new_zeros(batch_size, self.enc_hidden_size))
+        self.attention_weights = encoder_out.new_zeros(batch_size, max_encoder_time)
+        self.attention_cumulative = encoder_out.new_zeros(batch_size, max_encoder_time)
+        self.attn_context =  encoder_out.new_zeros(batch_size, self.enc_hidden_size).unsqueeze(1)
         self.keys_projected = self.attention.keys_proj(encoder_out) # need to calculate once per batch
         
         
@@ -179,26 +172,26 @@ class Decoder(nn.Module):
         attn_rnn_input = torch.cat((decoder_input, self.attn_context), dim=-1) # along feature dim
         _, self.attn_rnn_hidden = self.attn_rnn(attn_rnn_input, self.attn_rnn_hidden)
         self.attn_rnn_hidden = self.dropout(self.attn_rnn_hidden)
-        location_attn_input = torch.cat((self.attention_weights, self.attention_cumulative), dim=1)
-        self.attn_context, self.attention_weights = self.attention(self.attn_rnn_hidden, self.keys_projected, location_attn_input, key_mask)
+        location_attn_input = torch.cat((self.attention_weights.unsqueeze(1), self.attention_cumulative.unsqueeze(1)), dim=1)
+        self.attn_context, self.attention_weights = self.attention(self.attn_rnn_hidden.permute(1,0,2), 
+                                                                   self.keys_projected, location_attn_input, key_mask)
         self.attention_cumulative += self.attention_weights
-
         # second later rnn with attended input
-        out_rnn_input = torch.cat((self.attn_rnn_hidden, self.attn_context), dim=-1)
-        _, self.out_rnn_hidden = self.out_rnn_rnn(out_rnn_input, self.out_rnn_hidden)
+        out_rnn_input = torch.cat((self.attn_rnn_hidden.permute(1,0,2), self.attn_context), dim=-1)
+        _, self.out_rnn_hidden = self.out_rnn(out_rnn_input, self.out_rnn_hidden)
         self.out_rnn_hidden = self.dropout(self.out_rnn_hidden)
-        attended_out_hidden = torch.cat((self.out_rnn_hidden, self.attn_context), dim=-1)
+        attended_out_hidden = torch.cat((self.out_rnn_hidden.permute(1,0,2), self.attn_context), dim=-1)
         # output mel frame and stop token
         mel_out = self.dec_lin_proj(attended_out_hidden)
         stop_out = self.dec_eos_gate(attended_out_hidden)
         return mel_out, stop_out, self.attention_weights
         
-
-    
+          
     def forward(self, enc_outputs: torch.Tensor, text_lens: torch.Tensor, max_text_len: int, 
                 mel_spec_true: torch.Tensor, mel_spec_lens: torch.Tensor, teacher_force_ratio=0.0):
+        self.init_decoder_states(enc_outputs) # initialize hidden layers and keys for attention
         enc_mask = get_mask_from_lens(text_lens, max_text_len)
-        dec_input = self.pre_net(self.get_decoder_sos(mel_spec_true)) # batch, 1, n_mels (SOS)
+        dec_input = self.pre_net(self.get_decoder_sos(mel_spec_true)).unsqueeze(1) # batch, 1, n_mels (SOS)
         pre_net_out = self.pre_net(mel_spec_true)
         mel_outputs = []
         gate_outputs = []
@@ -217,8 +210,8 @@ class Decoder(nn.Module):
                 dec_input = self.pre_net(mel_out)  # use output from pred of decoder
         mel_outputs = torch.stack(mel_outputs, dim=1)
         gate_outputs =  torch.stack(gate_outputs, dim=1).squeeze(-1)
+        attention_outputs =  torch.stack(attention_outputs, dim=1).squeeze(-1)
         masked_mel_outputs, masked_gate_outputs, mask = self.mask_output(mel_outputs, gate_outputs, mel_spec_lens, max_time)
-    
         return masked_mel_outputs, masked_gate_outputs, attention_outputs, mask
 
     def get_decoder_sos(self, mel_spec_true: torch.Tensor):
@@ -230,28 +223,27 @@ class Decoder(nn.Module):
         masked_gate_outputs = gate_outputs.masked_fill(mask, 1e3) # Sigmoid will convert masked logit to probability ≈ 1.0   
         return masked_mel_outputs, masked_gate_outputs, mask
 
-
-
-
 class Seq2SeqTTS(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, 
-                enc_hidden_size, dropout_encoder=0.0, mel_bins=128, dropout_decoder=0.0):
+    def __init__(self, vocab_size, embedding_dim, enc_hidden_size, decoder_hidden_size, 
+                 pre_net_out_size, location_n_filters, location_kernel_size, attn_dim, 
+                 dropout_encoder=0.2, dropout_decoder=0.1, mel_bins=80):
         super(Seq2SeqTTS, self).__init__()
         self.mel_bins = mel_bins
         # -----Encoder-----
         self.encoder = Encoder(vocab_size, embedding_dim, enc_hidden_size, 
-                dropout=dropout_encoder)
-        
+                               dropout=dropout_encoder)
         # -----Decoder-----
-        self.decoder = Decoder(enc_hidden_size, mel_bins, dropout_decoder)
+        self.decoder = Decoder(pre_net_out_size, decoder_hidden_size, enc_hidden_size, 
+                               location_n_filters, location_kernel_size, attn_dim, 
+                               mel_bins, dropout_decoder)
 
-    def forward(self, x: torch.Tensor, text_seq_lens: torch.Tensor, mel_spec_true: torch.Tensor, mel_spec_lens: torch.Tensor, teacher_force_ratio=0.0):
+    def forward(self, x: torch.Tensor, text_seq_lens: torch.Tensor, mel_spec_true: torch.Tensor, 
+                mel_spec_lens: torch.Tensor, teacher_force_ratio=0.0):
         encoder_outputs, _  = self.encoder(x, text_seq_lens)
         max_text_len = x.size(1)
         # DECODER
-        # TODO fix up these max_text_len
-        masked_mel_outputs, masked_gate_outputs, mask = self.decoder(hidden, encoder_outputs, mel_spec_true, mel_spec_lens, teacher_force_ratio)
-        return masked_mel_outputs, masked_gate_outputs, mask
+        masked_mel_outputs, masked_gate_outputs, attention_outputs, mask = self.decoder(encoder_outputs, text_seq_lens, max_text_len, mel_spec_true, mel_spec_lens, teacher_force_ratio)
+        return masked_mel_outputs, masked_gate_outputs, attention_outputs, mask
    
 
     @torch.no_grad()
