@@ -22,7 +22,7 @@ transformer_config = {
         }
 simple_config = {
     'text_num_embeddings': 2 * symbols_len,
-    'encoder_embedding_size': 512,
+    'encoder_embedding_size': 256,
     'dim_feedforward': 1024,
     'embedding_size' : 256,
     'postnet_kernel_size' : 5,
