@@ -14,7 +14,7 @@ class Pipeline:
         optimizer = get_optimizer(self.model, lr, weight_decay) 
         train_dl, val_dl, test_dl = TTS_DataLoader.load_data(batch_size, mel_bins=mel_bins, subsample_ratio=subsample_ratio)
         criterion = TTS_Loss()
-        self.trainer = Trainer(self.model, max_epochs, optimizer, criterion,
+        self.trainer = Trainer(mel_bins, self.model, max_epochs, optimizer, criterion,
                       train_dl, val_dl, test_dl, device, checkpoint_prefix, teacher_f_ratio=teacher_f_ratio, grad_clip=True, max_norm=2.0)
 
     def model_info(self):

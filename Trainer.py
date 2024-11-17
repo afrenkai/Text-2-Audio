@@ -3,6 +3,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from enum import Enum
 from logging_utils import alignment_to_numpy, spectrogram_to_numpy
+from speech_utils import SpeechConverter
 
 class TTS_Loss(nn.Module):
     def __init__(self, stop_token_loss_multiplier=5):
@@ -32,7 +33,7 @@ class LossType(Enum):
 
 
 class Trainer():
-    def __init__(self, model, epochs, optimizer, 
+    def __init__(self, mel_bins, model, epochs, optimizer, 
                  criterion, train_dl, val_dl, test_dl, device, 
                  checkpoint_prefix, teacher_f_ratio=0, grad_clip=False, max_norm=1):
         self.model = model
@@ -51,6 +52,7 @@ class Trainer():
         self.grad_clip = grad_clip
         self.max_norm = max_norm
         self.writer = SummaryWriter(f'logs/{model.__class__.__name__}')
+        self.sc = SpeechConverter(mel_bins)
 
     def train(self):
         print("Starting training")
@@ -116,6 +118,8 @@ class Trainer():
             self.log_losses(epoch_val_loss, epoch_val_mel_loss, epoch_val_stop_loss, step_number, LossType.VAL)
             self.log_images(sample_mel_train, sample_alignment_train, step_number, LossType.TRAIN)
             self.log_images(sample_mel_val, sample_alignment_val, step_number, LossType.VAL)
+            self.log_sound(sample_mel_train, step_number, LossType.TRAIN)
+            self.log_sound(sample_mel_val, step_number, LossType.VAL)
             print(f"Epoch {epoch + 1}/{self.max_epochs},\n"
                   f"Train Loss (total / mel / stop): {epoch_loss, epoch_mel_loss, epoch_stop_loss},\n"
                   f"Valid Loss (total / mel / stop): {epoch_val_loss, epoch_val_mel_loss, epoch_val_stop_loss}\n"
@@ -143,7 +147,10 @@ class Trainer():
         name = self.get_log_name(loss_type)
         self.writer.add_image(f'{name}.melspec', spectrogram_to_numpy(sample_mel.data.cpu().numpy()), step_number)
         self.writer.add_image(f'{name}.alignment', alignment_to_numpy(sample_alignment.data.cpu().numpy().T), step_number)
-        
+
+    def log_sound(self, sample_mel, step_number, loss_type: LossType):
+        name = self.get_log_name(loss_type)
+        self.writer.add_audio(f'{name}.audio', self.sc.inverse_mel_spec_to_wav(sample_mel.permute(1,0)), step_number)
 
 
     # function to compute test loss
