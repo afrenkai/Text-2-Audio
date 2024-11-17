@@ -88,7 +88,7 @@ class Trainer():
             if epoch_loss < self.best_train_loss:
                 self.best_train_loss = epoch_loss
                 # TODO save dataloader, epoch number, optimizer states as well
-                torch.save(self.model.state_dict(), self.checkpoint_prefix+"_Train.pt")
+                torch.save(self.model.state_dict(), self.checkpoint_prefix+"/Train.pt")
             # Validation
             self.model.eval()
             running_val_loss = 0.0
@@ -113,7 +113,7 @@ class Trainer():
 
             if epoch_val_loss < self.best_val_loss:
                 self.best_val_loss = epoch_val_loss
-                torch.save(self.model.state_dict(), self.checkpoint_prefix+"_Validation.pt")
+                torch.save(self.model.state_dict(), self.checkpoint_prefix+"/Validation.pt")
 
             # Log step to TensorBoard
             step_number = epoch * len(self.train_dl) + 1
