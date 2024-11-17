@@ -4,6 +4,7 @@ from torch.utils.tensorboard import SummaryWriter
 from enum import Enum
 from logging_utils import alignment_to_numpy, spectrogram_to_numpy
 from speech_utils import SpeechConverter
+from TTS_DataLoader import seq_to_text
 
 class TTS_Loss(nn.Module):
     def __init__(self, stop_token_loss_multiplier=5):
@@ -64,7 +65,7 @@ class Trainer():
             running_mel_loss = 0.0
             # train loop
             for padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, stop_token_targets in self.train_dl:
-                padded_text_seqs, padded_selfmel_specs = padded_text_seqs.to(self.device), padded_mel_specs.to(self.device)
+                padded_text_seqs, padded_mel_specs = padded_text_seqs.to(self.device), padded_mel_specs.to(self.device)
                 stop_token_targets = stop_token_targets.to(self.device)
                 self.optimizer.zero_grad()
                 mel_outputs, gate_outputs, attention_outputs, mask = self.model(padded_text_seqs, text_seq_lens,
@@ -79,6 +80,7 @@ class Trainer():
                 running_mel_loss += mel_loss.item()
                 running_stop_loss += stop_token_loss.item()
                 sample_mel_train = mel_outputs[0]
+                sample_text_train = padded_text_seqs[0]
                 sample_alignment_train = attention_outputs[0]
             epoch_loss = running_loss / len(self.train_dl)
             epoch_mel_loss = running_mel_loss / len(self.train_dl)
@@ -103,6 +105,7 @@ class Trainer():
                     running_val_mel_loss += mel_loss.item()
                     running_val_stop_loss += stop_token_loss.item()
                     sample_mel_val = mel_outputs[0]
+                    sample_text_val= padded_text_seqs[0]
                     sample_alignment_val = attention_outputs[0]
             epoch_val_loss = running_val_loss / len(self.val_dl)
             epoch_val_mel_loss = running_val_mel_loss / len(self.val_dl)
@@ -118,8 +121,8 @@ class Trainer():
             self.log_losses(epoch_val_loss, epoch_val_mel_loss, epoch_val_stop_loss, step_number, LossType.VAL)
             self.log_images(sample_mel_train, sample_alignment_train, step_number, LossType.TRAIN)
             self.log_images(sample_mel_val, sample_alignment_val, step_number, LossType.VAL)
-            self.log_sound(sample_mel_train, step_number, LossType.TRAIN)
-            self.log_sound(sample_mel_val, step_number, LossType.VAL)
+            self.log_sound(sample_mel_train, sample_text_train, step_number, LossType.TRAIN)
+            self.log_sound(sample_mel_val, sample_text_val, step_number, LossType.VAL)
             print(f"Epoch {epoch + 1}/{self.max_epochs},\n"
                   f"Train Loss (total / mel / stop): {epoch_loss, epoch_mel_loss, epoch_stop_loss},\n"
                   f"Valid Loss (total / mel / stop): {epoch_val_loss, epoch_val_mel_loss, epoch_val_stop_loss}\n"
@@ -130,11 +133,11 @@ class Trainer():
     def get_log_name(loss_type: LossType):
         name = 'Default'
         if loss_type == LossType.TRAIN:
-            name = 'TrainLoss'
+            name = 'Train'
         elif loss_type == LossType.VAL:
-            name = 'ValLoss'
+            name = 'Val'
         elif loss_type == LossType.TEST:
-            name = 'TestLoss'
+            name = 'Test'
         return name
 
     def log_losses(self, epoch_loss, epoch_mel_loss, epoch_stop_loss, step_number, loss_type: LossType):
@@ -145,12 +148,14 @@ class Trainer():
         
     def log_images(self, sample_mel, sample_alignment, step_number, loss_type: LossType):
         name = self.get_log_name(loss_type)
-        self.writer.add_image(f'{name}.melspec', spectrogram_to_numpy(sample_mel.data.cpu().numpy()), step_number)
-        self.writer.add_image(f'{name}.alignment', alignment_to_numpy(sample_alignment.data.cpu().numpy().T), step_number)
+        self.writer.add_image(f'{name}.Melspec', spectrogram_to_numpy(sample_mel.data.cpu().numpy().T), step_number)
+        self.writer.add_image(f'{name}.Alignment', alignment_to_numpy(sample_alignment.data.cpu().numpy().T), step_number)
 
-    def log_sound(self, sample_mel, step_number, loss_type: LossType):
+    def log_sound(self, sample_mel, input_seq, step_number, loss_type: LossType):
         name = self.get_log_name(loss_type)
+        txt = seq_to_text(input_seq)
         self.writer.add_audio(f'{name}.audio', self.sc.inverse_mel_spec_to_wav(sample_mel.permute(1,0)), step_number)
+        self.writer.add_text(f'{name}.text', txt, step_number)
 
 
     # function to compute test loss

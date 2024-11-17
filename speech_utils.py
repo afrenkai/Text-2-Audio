@@ -72,7 +72,6 @@ class SpeechConverter():
         return db_mel_spec
     
     def inverse_mel_spec_to_wav(self, mel_spec):
-        print(mel_spec.shape)
         power_mel_spec = self.db_to_power_mel_spec(mel_spec)
         spectrogram = self.mel_inverse_transform(power_mel_spec)
         pseudo_wav = self.griffnlim_transform(spectrogram)

@@ -23,6 +23,8 @@ symbol_to_idx = {
   s: i for i, s in enumerate(symbols)
 }
 
+idx_to_symbol = {v: k for k, v in symbol_to_idx.items()}
+
 def text_to_seq_char_level(text):
     text = text.lower()
     seq = []
@@ -32,6 +34,16 @@ def text_to_seq_char_level(text):
             seq.append(idx)
     seq.append(symbol_to_idx.get(EOS))
     return torch.IntTensor(seq)
+
+def seq_to_text(seq, remove_pad = True):
+    text = ""
+    for idx in seq:
+        symbol = idx_to_symbol.get(idx.item(), None)
+        if remove_pad and symbol == PAD:
+            symbol = ""
+        text += symbol
+    return text
+
 
 
 
