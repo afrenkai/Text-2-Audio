@@ -7,8 +7,15 @@ from torch import nn
 
 seq2seq_config = {
             'vocab_size': symbols_len,
-            'embedding_dim' : 128,
-            'enc_hidden_size': 256
+            'embedding_dim' : 256,
+            'enc_hidden_size': 128,
+            'decoder_hidden_size' : 512,
+            'pre_net_out_size' : 256,
+            'location_n_filters' : 32,
+            'location_kernel_size' : 31,
+            'attn_dim' : 128,
+            'dropout_encoder' : 0.2,
+            'dropout_decoder' : 0.1,
         }
 
 transformer_config = {
@@ -43,16 +50,15 @@ def get_model(model_name: str, mel_bins) -> nn.Module:
         raise ValueError('Invalid model name for model hyper params.')
     return model
 
-def get_optimizer_list(model: nn.Module, lr=1e-4, weight_decay=1e-6, decoder_lr_ratio=1):
-    optimizer_list = []
+# return optimizer for specific model
+def get_optimizer(model: nn.Module, lr=1e-4, weight_decay=1e-6):
+    optimizer = None
     if type(model) is Seq2SeqTTS:
-        encoder_optimizer = Adam(model.encoder.parameters(), lr=lr, weight_decay=weight_decay)
-        decoder_optimizer = Adam(model.decoder.parameters(), lr=decoder_lr_ratio*lr, weight_decay=weight_decay)
-        optimizer_list = [encoder_optimizer, decoder_optimizer]
+        optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     elif type(model) is TTSTransformers:
         optimizer_list = [Adam(model.parameters(), lr=lr, weight_decay=weight_decay)]
     elif type(model) is SimpleTTS:
         optimizer_list = [Adam(model.parameters(), lr=lr, weight_decay=weight_decay)]
     else:
         raise ValueError('Invalid model name for model hyper params.')
-    return optimizer_list
+    return optimizer
