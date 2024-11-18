@@ -236,9 +236,9 @@ class TransformerTTS(nn.Module):
     @staticmethod
     def get_padding_mask(batch_size, text_lens, max_text_len, mel_lens, max_mel_len, device):
         text_pad_mask = torch.zeros(batch_size, max_text_len, device=device).masked_fill(
-            get_mask_from_lens(text_lens, max_text_len), float("-inf"))
+            get_mask_from_lens(text_lens, max_text_len).to(device), float("-inf"))
         mel_pad_mask = torch.zeros(batch_size, max_mel_len, device=device).masked_fill(
-            get_mask_from_lens(mel_lens, max_mel_len), float("-inf"))
+            get_mask_from_lens(mel_lens, max_mel_len).to(device), float("-inf"))
         return text_pad_mask, mel_pad_mask
     
     @staticmethod
