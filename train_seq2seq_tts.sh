@@ -2,7 +2,7 @@
 #SBATCH -N 1
 #SBATCH -n 8
 #SBATCH --mem=50g
-#SBATCH -J "TTS seq2seq tacomini"
+#SBATCH -J "TTS seq2seq"
 #SBATCH -p short
 #SBATCH -t 24:00:00
 #SBATCH --gres=gpu:1
