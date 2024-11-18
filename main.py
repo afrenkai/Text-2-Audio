@@ -33,7 +33,7 @@ Seq2SeqTTS = 'Seq2SeqTTS_GRU'
 TransformerTTS = 'TransformerTTS'
 
 if __name__ == "__main__":
-    model_name = TransformerTTS  # Model name
+    model_name = Seq2SeqTTS  # Model name
     # Checkpoint location
     checkpoint_dir = f'checkpoints/{model_name}'
     if not os.path.exists(checkpoint_dir):
