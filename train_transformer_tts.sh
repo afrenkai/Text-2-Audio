@@ -4,7 +4,7 @@
 #SBATCH --mem=50g
 #SBATCH -J "TTS Transformer"
 #SBATCH -p short
-#SBATCH -t 48:00:00
+#SBATCH -t 24:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --output=/home/sppradhan/Text-2-Audio/transformer_tts_%j.txt
 
