@@ -75,7 +75,7 @@ class LocationSensitiveAttention(nn.Module):
         self.enc_hidden_size = enc_hidden_size # hidden size of the encoder (hidden states from both directions)
         self.query_proj = nn.Linear(dec_hidden_size, attention_dim, bias=False) # project decoder hidden to attention dim
         self.keys_proj = nn.Linear(enc_hidden_size*2, attention_dim, bias=False)  # project all hidden encoder states to attention dim
-        self.score_proj = nn.Linear(attention_dim, 1, bias=False) # alignment score
+        self.score_proj = nn.Linear(attention_dim, 1) # alignment score
         self.location = LocationLayer(attention_dim, n_filters=n_filters, location_kernel_size=location_kernel_size)
         self.init_weights() # optimize gain for the activation function used
 
@@ -125,6 +125,44 @@ class DecoderPreNet(nn.Module):
         out =  nn.functional.relu(self.out_proj(out))
         out = nn.functional.dropout(out, 0.5, True) # force dropout even during inference 
         return out
+
+class PostNet(nn.Module):
+    def __init__(self, mel_bins, post_net_channels, post_net_kernel_size, num_layers=3):
+        super(PostNet, self).__init__()
+        self.convolutions = nn.ModuleList()
+        assert num_layers > 2, 'Number of convolutions in post net should be > 2'
+        self.convolutions.append(
+            nn.Sequential(
+                nn.Conv1d(mel_bins, post_net_channels,
+                        kernel_size=post_net_kernel_size, stride=1,
+                        padding=int((post_net_kernel_size - 1) / 2)),
+                nn.BatchNorm1d(post_net_channels))
+        )
+
+        for _ in range(1, num_layers - 1):
+            self.convolutions.append(
+                nn.Sequential(
+                    nn.Conv1d(post_net_channels, post_net_channels,
+                            kernel_size=post_net_kernel_size, stride=1,
+                            padding=int((post_net_kernel_size - 1) / 2)),
+                    nn.BatchNorm1d(post_net_channels))
+            )
+
+        self.convolutions.append(
+            nn.Sequential(
+                nn.Conv1d(post_net_channels, mel_bins,
+                        kernel_size=post_net_kernel_size, stride=1,
+                        padding=int((post_net_kernel_size - 1) / 2)),
+                nn.BatchNorm1d(mel_bins))
+        )
+        
+        self.dropout = nn.Dropout(0.5)
+
+    def forward(self, x):
+        for i in range(len(self.convolutions) - 1):
+            x = self.dropout(torch.tanh(self.convolutions[i](x)))
+        x = self.dropout(self.convolutions[-1](x)) # no tanh for last layer
+        return x
 
 class Decoder(nn.Module):
     def __init__(self, pre_net_out_size, decoder_hidden_size=512, enc_hidden_size = 512, 
@@ -226,6 +264,7 @@ class Decoder(nn.Module):
 class Seq2SeqTTS(nn.Module):
     def __init__(self, vocab_size, embedding_dim, enc_hidden_size, decoder_hidden_size, 
                  pre_net_out_size, location_n_filters, location_kernel_size, attn_dim, 
+                 post_net_channels, post_net_kernel_size,
                  dropout_encoder=0.2, dropout_decoder=0.1, mel_bins=80):
         super(Seq2SeqTTS, self).__init__()
         self.mel_bins = mel_bins
@@ -236,6 +275,9 @@ class Seq2SeqTTS(nn.Module):
         self.decoder = Decoder(pre_net_out_size, decoder_hidden_size, enc_hidden_size, 
                                location_n_filters, location_kernel_size, attn_dim, 
                                mel_bins, dropout_decoder)
+        
+        # -----PostNet-----
+        self.post_net = PostNet(mel_bins, post_net_channels, post_net_kernel_size)
 
     def forward(self, x: torch.Tensor, text_seq_lens: torch.Tensor, mel_spec_true: torch.Tensor, 
                 mel_spec_lens: torch.Tensor, teacher_force_ratio=0.0):
@@ -243,7 +285,11 @@ class Seq2SeqTTS(nn.Module):
         max_text_len = x.size(1)
         # DECODER
         masked_mel_outputs, masked_gate_outputs, attention_outputs, mask = self.decoder(encoder_outputs, text_seq_lens, max_text_len, mel_spec_true, mel_spec_lens, teacher_force_ratio)
-        return masked_mel_outputs, masked_gate_outputs, attention_outputs, mask
+        post_net_outputs = self.post_net(masked_mel_outputs.permute(0, 2, 1))
+        post_net_outputs = post_net_outputs.permute(0, 2, 1)
+        post_net_outputs = masked_mel_outputs + post_net_outputs # added residual (skipped connection)
+        post_net_outputs = post_net_outputs.masked_fill(mask.unsqueeze(-1), 0)
+        return masked_mel_outputs, post_net_outputs, masked_gate_outputs, attention_outputs, mask
    
 
     @torch.no_grad()

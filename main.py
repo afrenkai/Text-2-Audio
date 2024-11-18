@@ -29,11 +29,11 @@ class Pipeline:
         self.trainer.evaluate_on_test()
 
 
-Seq2SeqTTS = 'Seq2SeqTTS'
+Seq2SeqTTS = 'Seq2SeqTTS_GRU'
 TransformerTTS = 'TransformerTTS'
-SimpleTTS = 'SimpleTTS'
+
 if __name__ == "__main__":
-    model_name = SimpleTTS  # Model name
+    model_name = TransformerTTS  # Model name
     # Checkpoint location
     checkpoint_dir = f'checkpoints/{model_name}'
     if not os.path.exists(checkpoint_dir):
@@ -41,11 +41,11 @@ if __name__ == "__main__":
     checkpoint_prefix = checkpoint_dir
     # hyperparams
     mel_bins = 80
-    batch_size = 64
+    batch_size = 16
     lr = 1e-4
     weight_decay = 1e-6
     max_epochs = 400 
-    subsample_ratio = None # For testing arch (value of None for actual training)
+    subsample_ratio = 0.005 # For testing arch (value of None for actual training)
 
     # setup training pipeline
     Pipeline(model_name, mel_bins, batch_size, lr, max_epochs, weight_decay, checkpoint_prefix,

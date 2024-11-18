@@ -10,12 +10,12 @@ from TTS_DataLoader import seq_to_text
 class TTS_Loss(nn.Module):
     def __init__(self, stop_token_loss_multiplier=5):
         super(TTS_Loss, self).__init__()
-        # need proper loss here
         self.mel_loss_mse_sum = torch.nn.MSELoss(reduction='sum')
+        self.post_net_mse_sum = torch.nn.MSELoss(reduction='sum')
         self.stop_token_loss_sum = torch.nn.BCEWithLogitsLoss(reduction='sum')
         self.stop_token_alpha = stop_token_loss_multiplier
 
-    def forward(self, mel_output: torch.Tensor, mel_target: torch.Tensor,
+    def forward(self, mel_output: torch.Tensor, post_net_out: torch.Tensor, mel_target: torch.Tensor,
                 stop_token_out: torch.Tensor, stop_token_targets: torch.Tensor, mask: torch.Tensor):
         # count total number of 'real' predictions, i.e exclude masked values from loss calculations
         total_not_padding = (~mask).sum()
@@ -23,8 +23,9 @@ class TTS_Loss(nn.Module):
         mel_target.requires_grad = False
         stop_token_targets.requires_grad = False
         mel_loss = self.mel_loss_mse_sum(mel_output, mel_target) / (n_mels_out * total_not_padding)
+        post_net_loss = self.mel_loss_mse_sum(post_net_out, mel_target) / (n_mels_out * total_not_padding)
         stop_token_loss = self.stop_token_loss_sum(stop_token_out, stop_token_targets) / total_not_padding
-        return mel_loss, stop_token_loss * self.stop_token_alpha
+        return mel_loss+post_net_loss, stop_token_loss * self.stop_token_alpha
 
 
 class LossType(Enum):
@@ -68,24 +69,23 @@ class Trainer():
                 padded_text_seqs = padded_text_seqs.to(self.device)
                 padded_mel_specs = padded_mel_specs.to(self.device)
                 stop_token_targets = stop_token_targets.to(self.device)
-                for op in self.optimizers:
-                    op.zero_grad()
+                self.optimizer.zero_grad()
 
                 # Adjust the call based on the model type
                 if hasattr(self.model, 'teacher_forcing_ratio'):
                     # If the model uses teacher forcing, pass the ratio
-                    mel_outputs, gate_outputs, mask = self.model(
+                    mel_outputs, post_net_outputs, gate_outputs, attention_outputs, mask = self.model(
                         padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, self.teacher_f_ratio
                     )
                 else:
                     # For models that don't use teacher forcing
-                    mel_outputs, gate_outputs, mask = self.model(
+                    mel_outputs, post_net_outputs, gate_outputs, attention_outputs, mask  = self.model(
                         padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens
                     )
 
-                mel_loss, stop_token_loss = self.criterion(
-                    mel_outputs, padded_mel_specs, gate_outputs, stop_token_targets, mask
-                )
+                mel_loss, stop_token_loss = self.criterion(mel_outputs, post_net_outputs, padded_mel_specs, 
+                                                           gate_outputs, stop_token_targets, mask)
+                    
                 loss = mel_loss + stop_token_loss
                 loss.backward()
                 if self.grad_clip:
@@ -94,7 +94,7 @@ class Trainer():
                 running_loss += loss.item()
                 running_mel_loss += mel_loss.item()
                 running_stop_loss += stop_token_loss.item()
-                sample_mel_train = mel_outputs[0]
+                sample_mel_train = post_net_outputs[0]
                 sample_text_train = padded_text_seqs[0]
                 sample_alignment_train = attention_outputs[0]
             epoch_loss = running_loss / len(self.train_dl)
@@ -116,23 +116,23 @@ class Trainer():
                     stop_token_targets = stop_token_targets.to(self.device)
 
                     if hasattr(self.model, 'teacher_forcing_ratio'):
-                        mel_outputs, gate_outputs, mask = self.model(
+                        mel_outputs, post_net_outputs, gate_outputs, attention_outputs, mask  = self.model(
                             padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, 0
                         )
                     else:
-                        mel_outputs, gate_outputs, mask = self.model(
+                        mel_outputs, post_net_outputs, gate_outputs, attention_outputs, mask = self.model(
                             padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens
                         )
 
                     mel_loss, stop_token_loss = self.criterion(
-                        mel_outputs, padded_mel_specs, gate_outputs, stop_token_targets, mask
+                        mel_outputs, post_net_outputs, padded_mel_specs, gate_outputs, stop_token_targets, mask
                     )
 
                     loss = mel_loss + stop_token_loss
                     running_val_loss += loss.item()
                     running_val_mel_loss += mel_loss.item()
                     running_val_stop_loss += stop_token_loss.item()
-                    sample_mel_val = mel_outputs[0]
+                    sample_mel_val = post_net_outputs[0]
                     sample_text_val= padded_text_seqs[0]
                     sample_alignment_val = attention_outputs[0]
             epoch_val_loss = running_val_loss / len(self.val_dl)
