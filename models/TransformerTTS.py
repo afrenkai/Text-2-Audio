@@ -13,22 +13,17 @@ class EncoderPreNet(nn.Module):
     def __init__(self, vocab_size, encoder_embedding_size, embedding_size, dropout=0.0):
         super(EncoderPreNet, self).__init__()
         self.enc_embedding = nn.Embedding(vocab_size, encoder_embedding_size)
+        self.linear_1 = nn.Linear(encoder_embedding_size, encoder_embedding_size)
 
-        self.enc_conv1 = nn.Conv1d(embedding_size, embedding_size, kernel_size=3, padding=1, stride=1, dilation=1)
-        self.enc_batch_norm_1 = nn.BatchNorm1d(
-            embedding_size
-        )
-        self.enc_conv2 = nn.Conv1d(embedding_size, embedding_size, kernel_size=3, padding=1, stride=1, dilation=1)
-        self.enc_batch_norm_2 = nn.BatchNorm1d(
-            embedding_size
-        )
-        self.enc_conv3 = nn.Conv1d(embedding_size, embedding_size, kernel_size=3, padding=1, stride=1, dilation=1)
-        self.enc_batch_norm_3 = nn.BatchNorm1d(
-            embedding_size
-        )
+        self.enc_conv1 = nn.Conv1d(encoder_embedding_size, encoder_embedding_size, kernel_size=3, padding=1, stride=1, dilation=1)
+        self.enc_batch_norm_1 = nn.BatchNorm1d(encoder_embedding_size)
+        self.enc_conv2 = nn.Conv1d(encoder_embedding_size, encoder_embedding_size, kernel_size=3, padding=1, stride=1, dilation=1)
+        self.enc_batch_norm_2 = nn.BatchNorm1d(encoder_embedding_size)
+        self.enc_conv3 = nn.Conv1d(encoder_embedding_size, encoder_embedding_size, kernel_size=3, padding=1, stride=1, dilation=1)
+        self.enc_batch_norm_3 = nn.BatchNorm1d(encoder_embedding_size)
         self.dropout = nn.Dropout(dropout)
 
-        self.linear_1 = nn.Linear(encoder_embedding_size, encoder_embedding_size)
+        
 
         self.linear_2 = nn.Linear(encoder_embedding_size, embedding_size)
 
