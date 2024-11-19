@@ -21,7 +21,8 @@ seq2seq_config = {
 
 transformer_config = {
             'vocab_size': symbols_len,
-            'embedding_size': 512,
+            'embedding_size': 256,
+            'encoder_embedding_size': 512,
             'ff_hidden_size': 1024,
             'post_net_channels': 1024,
             'post_net_kernel_size': 5,

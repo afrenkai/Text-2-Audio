@@ -15,7 +15,8 @@ class Pipeline:
         train_dl, val_dl, test_dl = TTS_DataLoader.load_data(batch_size, mel_bins=mel_bins, subsample_ratio=subsample_ratio)
         criterion = TTS_Loss()
         self.trainer = Trainer(mel_bins, self.model, max_epochs, optimizer, criterion,
-                      train_dl, val_dl, test_dl, device, checkpoint_prefix, teacher_f_ratio=teacher_f_ratio, grad_clip=True, max_norm=2.0)
+                      train_dl, val_dl, test_dl, device, checkpoint_prefix, teacher_f_ratio=teacher_f_ratio, 
+                      grad_clip=True, max_norm=1.0)
 
     def model_info(self):
         params = filter(lambda p: p.requires_grad, self.model.parameters())
@@ -42,11 +43,11 @@ if __name__ == "__main__":
     # hyperparams
     mel_bins = 80
     batch_size = 64
-    lr = 1e-4
+    lr = 2*1e-4
     weight_decay = 1e-6
-    max_epochs = 400 
+    max_epochs = 10000
     subsample_ratio = None # For testing arch (value of None for actual training)
 
     # setup training pipeline
     Pipeline(model_name, mel_bins, batch_size, lr, max_epochs, weight_decay, checkpoint_prefix,
-             subsample_ratio=subsample_ratio, teacher_f_ratio=0.8).run()
+             subsample_ratio=subsample_ratio, teacher_f_ratio=1).run()
