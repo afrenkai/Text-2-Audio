@@ -169,20 +169,20 @@ class Trainer():
 
     def log_losses(self, epoch_loss, epoch_mel_loss, epoch_stop_loss, step_number, loss_type: LossType):
         name = self.get_log_name(loss_type)
-        self.writer.add_scalar(f'{name}.Total_Loss', epoch_loss, step_number)
-        self.writer.add_scalar(f'{name}.Mel_Loss', epoch_mel_loss, step_number)
-        self.writer.add_scalar(f'{name}.Stop_Loss', epoch_stop_loss, step_number)
+        self.writer.add_scalar(f'{name}/Total_Loss', epoch_loss, step_number)
+        self.writer.add_scalar(f'{name}/Mel_Loss', epoch_mel_loss, step_number)
+        self.writer.add_scalar(f'{name}/Stop_Loss', epoch_stop_loss, step_number)
         
     def log_images(self, sample_mel, sample_alignment, step_number, loss_type: LossType):
         name = self.get_log_name(loss_type)
-        self.writer.add_image(f'{name}.Melspec', spectrogram_to_numpy(sample_mel.data.cpu().numpy().T), step_number)
-        self.writer.add_image(f'{name}.Alignment', alignment_to_numpy(sample_alignment.data.cpu().numpy().T), step_number)
+        self.writer.add_image(f'{name}/Melspec', spectrogram_to_numpy(sample_mel.data.cpu().numpy().T), step_number)
+        self.writer.add_image(f'{name}/Alignment', alignment_to_numpy(sample_alignment.data.cpu().numpy().T), step_number)
 
     def log_sound(self, sample_mel, input_seq, step_number, loss_type: LossType):
         name = self.get_log_name(loss_type)
         txt = seq_to_text(input_seq)
-        self.writer.add_audio(f'{name}.audio', self.sc.inverse_mel_spec_to_wav(sample_mel.permute(1,0).cpu()), step_number)
-        self.writer.add_text(f'{name}.text', txt, step_number)
+        self.writer.add_audio(f'{name}/audio', self.sc.inverse_mel_spec_to_wav(sample_mel.permute(1,0).cpu()), step_number)
+        self.writer.add_text(f'{name}/text', txt, step_number)
 
     # function to compute test loss
     @torch.no_grad()

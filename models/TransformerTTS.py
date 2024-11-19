@@ -10,25 +10,26 @@ def get_mask_from_lens(lens, max_len):
 
 
 class EncoderPreNet(nn.Module):
-    def __init__(self, vocab_size, embedding_size, dropout=0.0):
+    def __init__(self, vocab_size, encoder_embedding_size, embedding_size, dropout=0.0):
         super(EncoderPreNet, self).__init__()
-        self.enc_embedding = nn.Embedding(vocab_size, embedding_size)
-        self.enc_conv1 = nn.Conv1d(embedding_size, embedding_size, kernel_size=3, padding=1, stride=1, dilation=1)
-        self.enc_batch_norm_1 = nn.BatchNorm1d(
-            embedding_size
-        )
-        self.enc_conv2 = nn.Conv1d(embedding_size, embedding_size, kernel_size=3, padding=1, stride=1, dilation=1)
-        self.enc_batch_norm_2 = nn.BatchNorm1d(
-            embedding_size
-        )
-        self.enc_conv3 = nn.Conv1d(embedding_size, embedding_size, kernel_size=3, padding=1, stride=1, dilation=1)
-        self.enc_batch_norm_3 = nn.BatchNorm1d(
-            embedding_size
-        )
+        self.enc_embedding = nn.Embedding(vocab_size, encoder_embedding_size)
+        self.linear_1 = nn.Linear(encoder_embedding_size, encoder_embedding_size)
+
+        self.enc_conv1 = nn.Conv1d(encoder_embedding_size, encoder_embedding_size, kernel_size=3, padding=1, stride=1, dilation=1)
+        self.enc_batch_norm_1 = nn.BatchNorm1d(encoder_embedding_size)
+        self.enc_conv2 = nn.Conv1d(encoder_embedding_size, encoder_embedding_size, kernel_size=3, padding=1, stride=1, dilation=1)
+        self.enc_batch_norm_2 = nn.BatchNorm1d(encoder_embedding_size)
+        self.enc_conv3 = nn.Conv1d(encoder_embedding_size, encoder_embedding_size, kernel_size=3, padding=1, stride=1, dilation=1)
+        self.enc_batch_norm_3 = nn.BatchNorm1d(encoder_embedding_size)
         self.dropout = nn.Dropout(dropout)
+
+        
+
+        self.linear_2 = nn.Linear(encoder_embedding_size, embedding_size)
 
     def forward(self, x: torch.Tensor):
         x = self.enc_embedding(x) # batch_size, max_seq_len, embedding_dim
+        x = self.linear_1(x)
         x = x.permute(0, 2, 1)
         # First Conv Layer
         x = self.enc_conv1(x)
@@ -46,6 +47,7 @@ class EncoderPreNet(nn.Module):
         x = nn.functional.relu(x)
         x = self.dropout(x)
         x = x.permute(0, 2, 1)
+        x = self.linear_2(x)
         return x
 
 class EncoderBlock(nn.Module):
@@ -210,14 +212,14 @@ class PositionalEncoding(nn.Module):
 
 
 class TransformerTTS(nn.Module):
-    def __init__(self, vocab_size, embedding_size, ff_hidden_size, 
+    def __init__(self, vocab_size, encoder_embedding_size, embedding_size, ff_hidden_size, 
                  post_net_channels, post_net_kernel_size, mel_bins=80, dropout_encoder=0.5):
         super(TransformerTTS, self).__init__()
         self.mel_bins = mel_bins
         # -----Positional Encoding-----
         self.positional_encoding = PositionalEncoding(embedding_size)
         # -----Encoder-----
-        self.encoder_pre_net = EncoderPreNet(vocab_size, embedding_size, dropout=dropout_encoder)
+        self.encoder_pre_net = EncoderPreNet(vocab_size, encoder_embedding_size, embedding_size, dropout=dropout_encoder)
         self.encoder_block_1 = EncoderBlock(embedding_size, ff_hidden_size)
         self.encoder_block_2 = EncoderBlock(embedding_size, ff_hidden_size)
         self.encoder_block_3 = EncoderBlock(embedding_size, ff_hidden_size)
@@ -230,7 +232,7 @@ class TransformerTTS(nn.Module):
         self.lin_proj = nn.Linear(embedding_size, mel_bins) # mel projection
         self.eos_gate = nn.Linear(embedding_size, 1) # stop projection
         # -----Post Net-----
-        self.post_net = PostNet(mel_bins, post_net_channels, post_net_kernel_size)
+        self.post_net = PostNet(mel_bins, post_net_channels, post_net_kernel_size, num_layers=5)
 
     
     @staticmethod
