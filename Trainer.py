@@ -190,6 +190,7 @@ class Trainer():
         running_loss = 0.0
         running_mel_loss = 0.0
         running_stop_loss = 0.0
+        token_contributions = []
         for padded_text_seqs, text_seq_lens, padded_mel_specs, mel_spec_lens, stop_token_targets in self.test_dl:
             padded_text_seqs = padded_text_seqs.to(self.device)
             padded_mel_specs = padded_mel_specs.to(self.device)
@@ -211,7 +212,15 @@ class Trainer():
             running_loss += loss.item()
             running_mel_loss += mel_loss.item()
             running_stop_loss += stop_token_loss.item()
+            num_valid_tokens = (~mask).sum(dim=-1)
+            per_token_loss = (mel_loss + running_stop_loss) / num_valid_tokens.sum()
+            token_contributions.append(per_token_loss.item())
+
         loss = running_loss / len(self.test_dl)
         mel_loss = running_mel_loss / len(self.test_dl)
         stop_loss = running_stop_loss / len(self.test_dl)
+        token_contribution = sum(token_contributions) / len(token_contributions)
         print(f"Test Loss: (total / mel / stop): {loss, mel_loss, stop_loss}")
+        print(f"Token Contribution Score (Average): {token_contribution}")
+
+
