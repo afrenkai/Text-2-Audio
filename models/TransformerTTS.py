@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torchaudio.transforms as T
 import math
+from tqdm import tqdm
 
 def get_mask_from_lens(lens, max_len):
     base_mask = torch.arange(max_len).expand(lens.size(0), max_len).T
@@ -325,12 +326,29 @@ class TransformerTTS(nn.Module):
         return masked_mel_outputs, masked_post_output, masked_gate_outputs, attn_weights, mask
 
     @torch.no_grad()
-    # TODO: FIXME Update with new structure
-    def inference(self, text_seq, max_mel_length=800, stop_token_thresh=0.5):
+    def inference(self, text, max_length=3, mel_bins=80, stop_token_threshold = 0.5):
+        self.eval()    
         self.train(False)
-        self.eval()
-        # assume text_seq has shape (1, input_seq_len)
-        text_lengths = torch.IntTensor([text_seq.shape[-1]])
-        pass
+        text_lengths = torch.tensor(text.shape[1]).unsqueeze(0)
+        N = 1
+        SOS = torch.zeros((N, 1, mel_bins))
+        
+        mel = SOS
+        mel_lengths = torch.tensor(1).unsqueeze(0)
+        stop_token_outputs = torch.FloatTensor([])
 
 
+        for i in tqdm(range(max_length)):
+            masked_post_output, _, gate_outputs, _, _ = self(text, text_lengths, mel, mel_lengths)
+            mel = torch.cat([mel, masked_post_output[:, -1:, :]], dim=1)
+            print(mel.shape)
+            if torch.sigmoid(gate_outputs[:,-1]) > stop_token_threshold:      
+                break
+            else:
+                if i == max_length-1:
+                    print("Max inference length reached.")
+                stop_token_outputs = torch.cat([stop_token_outputs, gate_outputs[:,-1:]], dim=1)
+                mel_lengths = torch.tensor(mel.shape[1]).unsqueeze(0)
+
+        mel = mel[:,1:,:] # remove sos
+        return mel
