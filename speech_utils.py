@@ -50,7 +50,7 @@ class SpeechConverter():
         self.griffnlim_transform = torchaudio.transforms.GriffinLim(
             n_fft=n_fft,
             win_length=win_length,
-            hop_length=hop_length
+            hop_length=hop_length,
         )
         
     def pow_to_db_mel_spec(self,mel_spec):

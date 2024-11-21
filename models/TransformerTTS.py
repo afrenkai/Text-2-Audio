@@ -2,9 +2,11 @@ import torch
 import torch.nn as nn
 import torchaudio.transforms as T
 import math
+from tqdm import tqdm
 
 def get_mask_from_lens(lens, max_len):
-    base_mask = torch.arange(max_len).expand(lens.size(0), max_len).T
+    base_mask = torch.arange(max_len).expand(lens.size(0), max_len).T.to(lens.device)
+
     mask = (base_mask > lens).permute(1,0)
     return mask
 
@@ -265,15 +267,74 @@ class TransformerTTS(nn.Module):
         masked_gate_outputs = masked_gate_outputs.squeeze(-1)
         return masked_mel_outputs, masked_post_output, masked_gate_outputs, mask
 
-    @staticmethod
-    def get_decoder_sos(mel_spec_true: torch.Tensor):
-        return mel_spec_true.new_zeros(mel_spec_true.size(0), mel_spec_true.size(2)) # batch, 1, n_mels
+    def get_decoder_sos(self, batch_size):
+        return torch.zeros(batch_size, self.mel_bins) # batch, n_mels
 
 
     def forward(self, text: torch.Tensor, text_seq_lens: torch.Tensor, mel_spec_true: torch.Tensor, 
                 mel_spec_lens: torch.Tensor):
         max_text_len = text.size(1)
-        max_mel_len = mel_spec_true.size(1) + 1 # add 1 for sos
+        batch_size = text.size(0)
+        # add SOS token to mel
+        sos = self.get_decoder_sos(batch_size).unsqueeze(1).to(mel_spec_true.device)
+        mel_spec_true = torch.cat((sos, mel_spec_true), dim=1)
+        max_mel_len = mel_spec_true.size(1)
+        
+        text_pad_mask, mel_pad_mask = self.get_padding_mask(batch_size, text_seq_lens, max_text_len, 
+                                                            mel_spec_lens, max_mel_len, text.device)
+        text_self_mask, mel_self_mask, look_ahead_mask = self.get_attn_mask(max_text_len, max_mel_len, text.device)
+
+        # get embeddings
+        text = self.encoder_pre_net(text)
+        # add positional encoding to text
+        text = self.positional_encoding(text)
+
+        # ENCODER
+        text = self.encoder_block_1(text, attn_mask=text_self_mask, key_padding_mask=text_pad_mask)
+        text = self.encoder_block_2(text, attn_mask=text_self_mask, key_padding_mask=text_pad_mask)
+        text = self.encoder_block_3(text, attn_mask=text_self_mask, key_padding_mask=text_pad_mask)
+
+        # DECODER PRE_NET
+        mel = self.decoder_pre_net(mel_spec_true)
+        # add positional encoding to mel specs
+        mel = self.positional_encoding(mel)
+
+        # DECODER
+        mel, _ = self.decoder_block_1(mel, text, mel_self_mask=mel_self_mask, mel_pad_mask=mel_pad_mask, 
+                                   look_ahead_mask=look_ahead_mask, text_pad_mask=text_pad_mask)
+        mel, _ = self.decoder_block_2(mel, text, mel_self_mask=mel_self_mask, mel_pad_mask=mel_pad_mask, 
+                                   look_ahead_mask=look_ahead_mask, text_pad_mask=text_pad_mask)
+        mel, attn_weights = self.decoder_block_3(mel, text, mel_self_mask=mel_self_mask, mel_pad_mask=mel_pad_mask, 
+                                   look_ahead_mask=look_ahead_mask, text_pad_mask=text_pad_mask)
+
+        # remove sos token from starting frame (consistent with seq2seqTTS)
+        mel = mel[:,1:,:]
+        max_mel_len = max_mel_len - 1
+
+        # PROJECTION
+        mel_proj = self.lin_proj(mel)
+        stop_token = self.eos_gate(mel)
+        
+        # POST NET
+        mel_post_net = self.post_net(mel_proj.permute(0, 2, 1))
+        mel_post_net = mel_post_net.permute(0, 2, 1)
+
+        mel_post_net = mel_post_net + mel_proj # added residual connection
+
+        masked_mel_outputs, masked_post_output, masked_gate_outputs, mask = self.mask_output(mel_proj, mel_post_net, stop_token, 
+                                                                                            mel_spec_lens, max_mel_len)
+        
+        # need to get attention outputs as well
+        return masked_mel_outputs, masked_post_output, masked_gate_outputs, attn_weights, mask
+
+
+    # this is identical to forward except it does not add an sos token to the start
+    # here mel_spec_true will always have sos, [sos] -> [sos, pred1] -> [sos, pred1, pred2]
+    # there are better ways to do this, but will take some refactoring for compatibility for tacotron2mini and seq2seq
+    def inference_forward(self, text: torch.Tensor, text_seq_lens: torch.Tensor, mel_spec_true: torch.Tensor, 
+                mel_spec_lens: torch.Tensor):
+        max_text_len = text.size(1)
+        max_mel_len = mel_spec_true.size(1)
         batch_size = text.size(0)
         text_pad_mask, mel_pad_mask = self.get_padding_mask(batch_size, text_seq_lens, max_text_len, 
                                                             mel_spec_lens, max_mel_len, text.device)
@@ -290,9 +351,6 @@ class TransformerTTS(nn.Module):
         text = self.encoder_block_3(text, attn_mask=text_self_mask, key_padding_mask=text_pad_mask)
 
         # DECODER PRE_NET
-        # add SOS token
-        sos = self.get_decoder_sos(mel_spec_true).unsqueeze(1)
-        mel_spec_true = torch.cat((sos, mel_spec_true), dim=1)
         mel = self.decoder_pre_net(mel_spec_true)
         # add positional encoding to mel specs
         mel = self.positional_encoding(mel)
@@ -300,13 +358,10 @@ class TransformerTTS(nn.Module):
         # DECODER
         mel, _ = self.decoder_block_1(mel, text, mel_self_mask=mel_self_mask, mel_pad_mask=mel_pad_mask, 
                                    look_ahead_mask=look_ahead_mask, text_pad_mask=text_pad_mask)
-        mel, _ = self.decoder_block_1(mel, text, mel_self_mask=mel_self_mask, mel_pad_mask=mel_pad_mask, 
+        mel, _ = self.decoder_block_2(mel, text, mel_self_mask=mel_self_mask, mel_pad_mask=mel_pad_mask, 
+                            look_ahead_mask=look_ahead_mask, text_pad_mask=text_pad_mask)
+        mel, attn_weights = self.decoder_block_3(mel, text, mel_self_mask=mel_self_mask, mel_pad_mask=mel_pad_mask, 
                                    look_ahead_mask=look_ahead_mask, text_pad_mask=text_pad_mask)
-        mel, attn_weights = self.decoder_block_1(mel, text, mel_self_mask=mel_self_mask, mel_pad_mask=mel_pad_mask, 
-                                   look_ahead_mask=look_ahead_mask, text_pad_mask=text_pad_mask)
-
-        # remove sos token from starting frame (consistent with seq2seqTTS)
-        mel = mel[:,1:,:]
 
         # PROJECTION
         mel_proj = self.lin_proj(mel)
@@ -319,18 +374,40 @@ class TransformerTTS(nn.Module):
         mel_post_net = mel_post_net + mel_proj # added residual connection
 
         masked_mel_outputs, masked_post_output, masked_gate_outputs, mask = self.mask_output(mel_proj, mel_post_net, stop_token, 
-                                                                                            mel_spec_lens, max_mel_len-1)
+                                                                                            mel_spec_lens, max_mel_len)
         
         # need to get attention outputs as well
         return masked_mel_outputs, masked_post_output, masked_gate_outputs, attn_weights, mask
 
+
     @torch.no_grad()
-    # TODO: FIXME Update with new structure
-    def inference(self, text_seq, max_mel_length=800, stop_token_thresh=0.5):
+    def inference(self, text, device, max_length=800, mel_bins=80, stop_token_threshold = 0.5, with_tqdm=False):
+        self.eval()    
         self.train(False)
-        self.eval()
-        # assume text_seq has shape (1, input_seq_len)
-        text_lengths = torch.IntTensor([text_seq.shape[-1]])
-        pass
+        text_lengths = torch.tensor(text.shape[1]).unsqueeze(0).to(device)
+        N = 1
+        SOS = torch.zeros((N, 1, mel_bins)).to(device)
+        
+        mel = SOS
+        mel_lengths = torch.tensor(1).unsqueeze(0).to(device)
+        stop_token_outputs = torch.FloatTensor([]).to(device)
 
+        _range = range(max_length)
+        if with_tqdm:
+            _range = tqdm(range(max_length))
 
+        for i in _range:
+            _, masked_post_output, gate_outputs, _, _ = self.inference_forward(text, text_lengths, mel, mel_lengths)
+            mel = torch.cat([mel, masked_post_output[:, -1:, :]], dim=1)
+
+            if torch.sigmoid(gate_outputs[:,-1]) > stop_token_threshold:      
+                break
+            else:
+                if i == max_length-1:
+                    print("Max inference length reached.")
+                    break
+                stop_token_outputs = torch.cat([stop_token_outputs, gate_outputs[:,-1:]], dim=1)
+                mel_lengths = torch.tensor(mel.size(1)).unsqueeze(0)
+
+        mel = mel[:,1:,:] # remove sos
+        return mel, stop_token_outputs

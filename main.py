@@ -13,7 +13,7 @@ class Pipeline:
         self.model = get_model(model_name, mel_bins).to(device)
         optimizer = get_optimizer(self.model, lr, weight_decay) 
         train_dl, val_dl, test_dl = TTS_DataLoader.load_data(batch_size, mel_bins=mel_bins, subsample_ratio=subsample_ratio)
-        criterion = TTS_Loss()
+        criterion = TTS_Loss().to(device)
         self.trainer = Trainer(mel_bins, self.model, max_epochs, optimizer, criterion,
                       train_dl, val_dl, test_dl, device, checkpoint_prefix, teacher_f_ratio=teacher_f_ratio, 
                       grad_clip=True, max_norm=1.0)
@@ -27,7 +27,7 @@ class Pipeline:
     def run(self):
         self.model_info()
         self.trainer.train()
-        self.trainer.evaluate_on_test()
+        # self.trainer.evaluate_on_test()
 
 
 Seq2SeqTTS = 'Seq2SeqTTS_GRU'

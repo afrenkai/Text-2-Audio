@@ -9,6 +9,7 @@ from speech_utils import SpeechConverter
 
 EOS = 'EOS'
 PAD = 'PAD'
+
 symbols = [
     PAD, EOS, ' ', '!', ',', '-', '.', \
     ';', '?', 'a', 'b', 'c', 'd', 'e', 'f', \
