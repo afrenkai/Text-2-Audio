@@ -88,7 +88,6 @@ def create_seq2seq_tts_diagram():
     dot.edge('Post_Net', 'Mel_Output')
     dot.node('Stop_Token_Output', 'Stop Token Output', shape='oval', fillcolor='lightgreen')
     dot.edge('Stop_Token_Projection', 'Stop_Token_Output')
-    dot.node('Attention_Weights', 'Attention Weights', shape='oval', fillcolor='lightgreen')
     dot.edge('Location_Sensitive_Attention', 'Attention_Weights', style='dashed')
     with dot.subgraph() as s:
         s.attr(rank='same')
@@ -99,7 +98,6 @@ def create_seq2seq_tts_diagram():
         s.attr(rank='same')
         s.node('Mel_Output')
         s.node('Stop_Token_Output')
-        s.node('Attention_Weights')
 
     dot.render('seq2seq_tts_architecture', view=True)
 
