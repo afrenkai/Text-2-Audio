@@ -8,11 +8,11 @@ from TTS_DataLoader import seq_to_text
 
 
 class TTS_Loss(nn.Module):
-    def __init__(self, stop_token_loss_multiplier=5):
+    def __init__(self, stop_token_loss_multiplier=1):
         super(TTS_Loss, self).__init__()
         self.mel_loss_mse_sum = torch.nn.MSELoss(reduction='sum')
         self.post_net_mse_sum = torch.nn.MSELoss(reduction='sum')
-        self.stop_token_loss_sum = torch.nn.BCEWithLogitsLoss(reduction='sum')
+        self.stop_token_loss_sum = torch.nn.BCEWithLogitsLoss(reduction='sum', pos_weight=torch.Tensor([5]))
         self.stop_token_alpha = stop_token_loss_multiplier
 
     def forward(self, mel_output: torch.Tensor, post_net_out: torch.Tensor, mel_target: torch.Tensor,
