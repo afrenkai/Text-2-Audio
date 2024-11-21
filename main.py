@@ -42,11 +42,11 @@ if __name__ == "__main__":
     checkpoint_prefix = checkpoint_dir
     # hyperparams
     mel_bins = 80
-    batch_size = 16
+    batch_size = 64
     lr = 2*1e-4
     weight_decay = 1e-6
     max_epochs = 10000
-    subsample_ratio = 0.01 # For testing arch (value of None for actual training)
+    subsample_ratio = None # For testing arch (value of None for actual training)
 
     # setup training pipeline
     Pipeline(model_name, mel_bins, batch_size, lr, max_epochs, weight_decay, checkpoint_prefix,
